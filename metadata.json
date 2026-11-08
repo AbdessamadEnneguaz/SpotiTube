@@ -1,0 +1,6 @@
+{
+  "name": "SpotiTube - Music Discovery Platform",
+  "description": "A Spotify-inspired personal music discovery platform featuring global and regional music search, YouTube IFrame API playback, dynamic queues, and audio controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpotiTube - Glassmorphic Dark Music Discovery</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="logo">
+        <div class="logo-icon">▶</div>
+        <h2>SpotiTube</h2>
+      </div>
+
+      <nav class="nav-links">
+        <button class="nav-btn active" id="nav-all">Discover</button>
+        <button class="nav-btn" id="nav-chaabi">Moroccan Chaabi</button>
+        <button class="nav-btn" id="nav-rai">Rai Classics</button>
+        <button class="nav-btn" id="nav-rap">Maghreb Rap</button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="api-status" id="api-status-badge">YouTube API: Ready</div>
+      </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-panel">
+      <!-- Top search header -->
+      <header class="topbar">
+        <div class="search-box">
+          <input type="text" id="search-input" placeholder="Search artists, Moroccan Chaabi, Rai, Rap..." />
+          <button id="search-submit">Search</button>
+        </div>
+      </header>
+
+      <!-- Track List Table -->
+      <div class="content-scroll">
+        <h1 id="view-title">Featured Tracks</h1>
+        <div class="tracks-table">
+          <div class="table-header">
+            <span>#</span>
+            <span>Title</span>
+            <span>Artist</span>
+            <span>Action</span>
+          </div>
+          <div id="tracks-container" class="table-body">
+            <!-- Dynamic rows will be inserted here -->
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- YouTube Official IFrame Player (Hidden or PiP) -->
+    <div id="youtube-iframe-holder">
+      <div id="yt-player"></div>
+    </div>
+
+    <!-- Spotify-Style Bottom Control Bar -->
+    <footer class="player-bar">
+      <!-- Left Track Info (Clickable for Glassmorphic Modal) -->
+      <div class="player-left">
+        <div class="thumb-wrapper" id="thumb-click-trigger" title="Click to open glassmorphic album cover artwork">
+          <img id="current-thumb" src="https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500" alt="Track Artwork" />
+        </div>
+        
+        <!-- Live Sound Wave Equalizer Indicator -->
+        <div id="sound-wave-bars" class="sound-wave-bars" title="Lossless Audio Stream">
+          <span class="wave-bar b1"></span>
+          <span class="wave-bar b2"></span>
+          <span class="wave-bar b3"></span>
+          <span class="wave-bar b4"></span>
+        </div>
+
+        <div class="track-meta">
+          <div id="current-title" class="track-title" title="Click to open glassmorphic album cover artwork">Select a track</div>
+          <div class="track-artist-row">
+            <span id="current-artist" class="track-artist">SpotiTube Player</span>
+            <span class="hifi-tag">Hi-Fi</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center Controls & Seekbar -->
+      <div class="player-center">
+        <div class="buttons-row">
+          <button id="btn-prev" class="ctrl-btn" title="Previous Track">⏮</button>
+          <button id="btn-play-pause" class="play-btn" title="Play">▶</button>
+          <button id="btn-next" class="ctrl-btn" title="Next Track">⏭</button>
+          
+          <!-- 3-State Repeat Toggle Button (Off -> Repeat Queue -> Repeat One) -->
+          <button id="btn-repeat" class="ctrl-btn repeat-btn" title="Repeat: Off">
+            <span class="repeat-icon">🔁</span>
+            <span id="repeat-badge" class="repeat-badge"></span>
+          </button>
+        </div>
+        <div class="seekbar-row">
+          <span id="time-current">0:00</span>
+          <input type="range" id="seek-bar" min="0" max="100" value="0" />
+          <span id="time-duration">0:00</span>
+        </div>
+      </div>
+
+      <!-- Right Volume -->
+      <div class="player-right">
+        <button id="btn-mute" class="ctrl-btn" title="Mute/Unmute">🔊</button>
+        <input type="range" id="volume-bar" min="0" max="100" value="80" />
+      </div>
+    </footer>
+  </div>
+
+  <!-- Full-Screen Glassmorphic Album Cover Modal Backdrop -->
+  <div id="modal-backdrop" class="modal-backdrop">
+    <!-- Ambient blurred background effect -->
+    <div id="ambient-bg" class="ambient-bg"></div>
+
+    <!-- Glassmorphic Content Panel -->
+    <div class="glass-panel album-art-modal">
+      <button id="btn-close-modal" class="modal-close-btn" aria-label="Close modal">✕</button>
+
+      <div class="cover-wrapper">
+        <img id="modal-cover-img" src="" alt="Album Cover" />
+      </div>
+
+      <div class="modal-track-info">
+        <h2 id="modal-track-title" class="modal-title">Song Title</h2>
+        <p id="modal-track-artist" class="modal-artist">Artist Name</p>
+      </div>
+
+      <!-- Seekbar inside Glass Modal -->
+      <div class="modal-seekbar-row">
+        <span id="modal-time-current">0:00</span>
+        <input type="range" id="modal-seek-bar" min="0" max="100" value="0" />
+        <span id="modal-time-duration">0:00</span>
+      </div>
+
+      <!-- Playback Controls inside Glass Modal -->
+      <div class="modal-controls">
+        <button id="modal-btn-prev" class="ctrl-btn" title="Previous Track">⏮</button>
+        <button id="modal-btn-play-pause" class="play-btn modal-play-btn" title="Play">▶</button>
+        <button id="modal-btn-next" class="ctrl-btn" title="Next Track">⏭</button>
+        <button id="modal-btn-repeat" class="ctrl-btn repeat-btn" title="Repeat Mode">
+          <span>🔁</span>
+          <span id="modal-repeat-badge" class="repeat-badge"></span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- YouTube Official IFrame API -->
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
