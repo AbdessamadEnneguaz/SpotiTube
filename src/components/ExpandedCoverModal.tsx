@@ -83,7 +83,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label="Expanded Album Artwork"
-      className="fixed inset-0 z-50 flex flex-col justify-between overflow-hidden bg-black/95 text-white animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex flex-col justify-between overflow-y-auto bg-black/95 text-white animate-in fade-in duration-200"
     >
       {/* Blurred Ambient Background Effect */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
@@ -96,7 +96,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
       </div>
 
       {/* Top Bar with Dismiss Button */}
-      <div className="p-4 sm:p-6 flex items-center justify-between">
+      <div className="p-3 sm:p-6 flex items-center justify-between shrink-0">
         <button
           onClick={onClose}
           aria-label="Close expanded artwork view"
@@ -109,7 +109,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
           <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">
             Playing From Playlist
           </span>
-          <span className="text-xs font-semibold text-white truncate max-w-[200px] sm:max-w-md">
+          <span className="text-xs font-semibold text-white truncate max-w-[180px] sm:max-w-md">
             {track.album || 'SpotiTube Collection'}
           </span>
         </div>
@@ -124,9 +124,9 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
       </div>
 
       {/* Center Artwork & Track Details */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-2 max-w-lg mx-auto w-full">
+      <div className="flex-1 flex flex-col items-center justify-center px-5 sm:px-6 py-2 max-w-lg mx-auto w-full">
         {/* Album Artwork Card */}
-        <div className="relative group aspect-square w-full max-w-[320px] sm:max-w-[380px] md:max-w-[420px] rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] border border-white/10 mb-6 bg-neutral-900">
+        <div className="relative group aspect-square w-full max-w-[260px] sm:max-w-[380px] md:max-w-[420px] rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] border border-white/10 mb-5 sm:mb-6 bg-neutral-900">
           <img
             src={imgSrc}
             onError={() => {
@@ -141,10 +141,10 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
         {/* Track Title, Artist & Like */}
         <div className="w-full flex items-center justify-between mb-4">
           <div className="truncate pr-4 flex-1">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight truncate">
+            <h1 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight truncate">
               {track.title}
             </h1>
-            <p className="text-base sm:text-lg text-neutral-400 font-semibold truncate mt-0.5">
+            <p className="text-sm sm:text-lg text-neutral-400 font-semibold truncate mt-0.5">
               {track.artist}
             </p>
           </div>

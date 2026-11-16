@@ -17,6 +17,7 @@ import {
   PlusSquare
 } from 'lucide-react';
 import { Sidebar } from './components/Sidebar';
+import { MobileNav } from './components/MobileNav';
 import { Header } from './components/Header';
 import { PlayerBar } from './components/PlayerBar';
 import { TrackRow } from './components/TrackRow';
@@ -477,7 +478,7 @@ export default function App() {
   }, [duration]);
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-black text-white font-sans antialiased">
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-black text-white font-sans antialiased">
       {/* Top Application Body (Sidebar + Main Content + Side Panels) */}
       <div className="flex flex-1 overflow-hidden">
         {/* Spotify-style Left Sidebar */}
@@ -544,7 +545,7 @@ export default function App() {
           {/* Scrollable View Area with CSS View Transition Animation */}
           <main
             ref={mainContentRef}
-            className="flex-1 overflow-y-auto px-4 md:px-6 py-6 scrollbar-thin scrollbar-thumb-neutral-700"
+            className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 scrollbar-thin scrollbar-thumb-neutral-700"
           >
             <div
               key={viewKey}
@@ -552,16 +553,16 @@ export default function App() {
             >
               {/* VIEW 1: PLAYLIST OR LIKED SONGS VIEW */}
             {currentView === 'playlist' && activePlaylist && (
-              <div className="space-y-6">
+              <div className="space-y-5 sm:space-y-6">
                 {/* Playlist Banner */}
-                <div className="flex flex-col md:flex-row items-start md:items-end gap-6 bg-gradient-to-b from-neutral-800/80 to-[#121212] p-6 rounded-2xl border border-neutral-800 shadow-xl">
+                <div className="flex flex-col md:flex-row items-center md:items-end text-center md:text-left gap-4 sm:gap-6 bg-gradient-to-b from-neutral-800/80 to-[#121212] p-4 sm:p-6 rounded-2xl border border-neutral-800 shadow-xl">
                   <img
                     src={activePlaylist.coverImage}
                     alt={activePlaylist.name}
-                    className="w-40 h-40 md:w-48 md:h-48 rounded-xl object-cover shadow-2xl shadow-black/80 shrink-0"
+                    className="w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48 rounded-xl object-cover shadow-2xl shadow-black/80 shrink-0"
                   />
-                  <div className="flex-1 space-y-2">
-                    <div className="flex items-center gap-2">
+                  <div className="flex-1 space-y-2 min-w-0 w-full">
+                    <div className="flex items-center justify-center md:justify-start gap-2">
                       <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">
                         {activePlaylist.isCustom ? 'Custom Playlist' : 'Playlist'}
                       </span>
@@ -569,13 +570,13 @@ export default function App() {
                         PREMIUM
                       </span>
                     </div>
-                    <h1 className="text-3xl md:text-5xl font-extrabold text-white tracking-tight">
+                    <h1 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-white tracking-tight break-words">
                       {activePlaylist.name}
                     </h1>
-                    <p className="text-sm text-neutral-300 max-w-2xl">
+                    <p className="text-xs sm:text-sm text-neutral-300 max-w-2xl mx-auto md:mx-0">
                       {activePlaylist.description}
                     </p>
-                    <div className="flex items-center gap-2 text-xs text-neutral-400 pt-2">
+                    <div className="flex items-center justify-center md:justify-start gap-2 text-xs text-neutral-400 pt-1">
                       <span className="font-semibold text-white">SpotiTube Premium</span>
                       <span>•</span>
                       <span>{activePlaylist.tracks.length} songs</span>
@@ -592,16 +593,16 @@ export default function App() {
                       }
                     }}
                     aria-label={`Play ${activePlaylist.name}`}
-                    className="w-14 h-14 rounded-full bg-[#1db954] hover:bg-[#1ed760] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-[#1db954]/20 cursor-pointer"
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#1db954] hover:bg-[#1ed760] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-[#1db954]/20 cursor-pointer"
                   >
-                    <Play className="w-6 h-6 fill-current translate-x-0.5" />
+                    <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current translate-x-0.5" />
                   </button>
                 </div>
 
                 {/* Track List */}
                 <div className="space-y-1">
-                  <div className="flex items-center gap-4 px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                    <span className="w-6 text-center">#</span>
+                  <div className="flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
+                    <span className="w-5 sm:w-6 text-center">#</span>
                     <span className="flex-1">Title</span>
                     <span className="hidden md:block w-1/4">Album</span>
                     <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
@@ -641,8 +642,8 @@ export default function App() {
               <div className="space-y-6">
                 {/* Search Header Info */}
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-2xl font-bold text-white">
+                  <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-bold text-white break-words">
                       {searchQuery ? `Search Results for "${searchQuery}"` : 'Search & Discover'}
                     </h1>
                     {searchStatusMsg && searchQuery && (
@@ -655,7 +656,7 @@ export default function App() {
 
                 {/* Case 1: When user has not typed a query, show Recent Searches & Browse categories */}
                 {!searchQuery.trim() ? (
-                  <div className="space-y-8">
+                  <div className="space-y-6 sm:space-y-8">
                     {/* Persistent Recent Searches Section */}
                     {recentSearches.length > 0 && (
                       <RecentSearches
@@ -668,45 +669,45 @@ export default function App() {
 
                     {/* Spotify-style Browse All Categories */}
                     <section className="space-y-3">
-                      <h2 className="text-xl font-bold text-white tracking-tight">Browse All Categories</h2>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Browse All Categories</h2>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                         <div
                           onClick={() => handleSelectRecentSearch('Moroccan Chaabi')}
-                          className="h-28 rounded-xl p-4 bg-gradient-to-br from-emerald-600 to-teal-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-emerald-600 to-teal-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
                         >
-                          <span className="font-extrabold text-white text-base">Moroccan Chaabi</span>
-                          <span className="text-[11px] text-emerald-200">Daoudi, Senhaji, Stati</span>
+                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Moroccan Chaabi</span>
+                          <span className="text-[10px] sm:text-[11px] text-emerald-200 truncate">Daoudi, Senhaji, Stati</span>
                         </div>
                         <div
                           onClick={() => handleSelectRecentSearch('Rai Classics')}
-                          className="h-28 rounded-xl p-4 bg-gradient-to-br from-amber-600 to-rose-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-amber-600 to-rose-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
                         >
-                          <span className="font-extrabold text-white text-base">Rai Legends</span>
-                          <span className="text-[11px] text-amber-200">Khaled, Mami, Hasni</span>
+                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Rai Legends</span>
+                          <span className="text-[10px] sm:text-[11px] text-amber-200 truncate">Khaled, Mami, Hasni</span>
                         </div>
                         <div
                           onClick={() => handleSelectRecentSearch('Maghreb Rap 7elmetado')}
-                          className="h-28 rounded-xl p-4 bg-gradient-to-br from-purple-700 to-rose-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-purple-700 to-rose-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
                         >
-                          <span className="font-extrabold text-white text-base">Maghreb Rap & Drill</span>
-                          <span className="text-[11px] text-purple-200">ElGrandeToto, Dizzy Dros</span>
+                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Maghreb Rap & Drill</span>
+                          <span className="text-[10px] sm:text-[11px] text-purple-200 truncate">ElGrandeToto, Dizzy Dros</span>
                         </div>
                         <div
                           onClick={() => handleSelectRecentSearch('Top Worldwide Hits')}
-                          className="h-28 rounded-xl p-4 bg-gradient-to-br from-blue-600 to-indigo-950 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-blue-600 to-indigo-950 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
                         >
-                          <span className="font-extrabold text-white text-base">Global Hits</span>
-                          <span className="text-[11px] text-blue-200">Top 50 Chart Toppers</span>
+                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Global Hits</span>
+                          <span className="text-[10px] sm:text-[11px] text-blue-200 truncate">Top 50 Chart Toppers</span>
                         </div>
                       </div>
                     </section>
 
                     {/* Suggested Popular Tracks */}
                     <section className="space-y-3">
-                      <h2 className="text-xl font-bold text-white tracking-tight">Popular Suggestions</h2>
+                      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Popular Suggestions</h2>
                       <div className="space-y-1">
-                        <div className="flex items-center gap-4 px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                          <span className="w-6 text-center">#</span>
+                        <div className="flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
+                          <span className="w-5 sm:w-6 text-center">#</span>
                           <span className="flex-1">Title</span>
                           <span className="hidden md:block w-1/4">Genre</span>
                           <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
@@ -765,8 +766,8 @@ export default function App() {
                       </div>
                     ) : (
                       <div className="space-y-1">
-                        <div className="flex items-center gap-4 px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                          <span className="w-6 text-center">#</span>
+                        <div className="flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
+                          <span className="w-5 sm:w-6 text-center">#</span>
                           <span className="flex-1">Title</span>
                           <span className="hidden md:block w-1/4">Source / Album</span>
                           <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
@@ -800,14 +801,14 @@ export default function App() {
 
             {/* VIEW 3: HOME DASHBOARD (SPOTIFY EXACT EXPERIENCE) */}
             {currentView === 'home' && (
-              <div className="space-y-8">
+              <div className="space-y-7 sm:space-y-8">
                 {/* Greeting & Quick Access Cards */}
                 <div>
-                  <h1 className="text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-4">
+                  <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-3 sm:mb-4">
                     {greeting}
                   </h1>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
                     {allPlaylists.slice(0, 5).concat([
                       {
                         id: 'liked',
@@ -823,14 +824,14 @@ export default function App() {
                           setSelectedPlaylistId(item.id);
                           setCurrentView('playlist');
                         }}
-                        className="group flex items-center bg-[#282828]/60 hover:bg-[#323232] rounded-md overflow-hidden transition-all duration-200 cursor-pointer shadow-sm relative"
+                        className="group flex items-center bg-[#282828]/70 hover:bg-[#323232] rounded-md overflow-hidden transition-all duration-200 cursor-pointer shadow-sm relative"
                       >
                         <img
                           src={item.coverImage}
                           alt={item.name}
-                          className="w-16 h-16 object-cover shrink-0"
+                          className="w-12 h-12 sm:w-16 sm:h-16 object-cover shrink-0"
                         />
-                        <div className="px-3.5 flex-1 truncate font-bold text-sm text-white">
+                        <div className="px-2.5 sm:px-3.5 flex-1 min-w-0 font-bold text-xs sm:text-sm text-white line-clamp-2 sm:truncate">
                           {item.name}
                         </div>
                         <button
@@ -841,7 +842,7 @@ export default function App() {
                             }
                           }}
                           aria-label={`Play ${item.name}`}
-                          className="w-10 h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center opacity-0 group-hover:opacity-100 shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all mr-3 shrink-0 cursor-pointer"
+                          className="hidden sm:flex w-10 h-10 rounded-full bg-[#1db954] text-black items-center justify-center opacity-0 group-hover:opacity-100 shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all mr-3 shrink-0 cursor-pointer"
                         >
                           <Play className="w-4 h-4 fill-current translate-x-0.2" />
                         </button>
@@ -852,37 +853,37 @@ export default function App() {
 
                 {/* Section 1: Moroccan Chaabi Ambiance */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
                         <span>Moroccan Chaabi Ambiance</span>
-                        <span className="text-xs font-mono font-normal text-[#1db954] bg-[#1db954]/10 px-2 py-0.5 rounded-full">
+                        <span className="text-[11px] font-mono font-normal text-[#1db954] bg-[#1db954]/10 px-2 py-0.5 rounded-full whitespace-nowrap">
                           Authentic Groove
                         </span>
                       </h2>
-                      <p className="text-xs text-neutral-400">The masters of rhythm: Daoudi, Senhaji, Najat Aatabou, Stati & Tahour</p>
+                      <p className="text-xs text-neutral-400 mt-0.5">The masters of rhythm: Daoudi, Senhaji, Najat Aatabou, Stati & Tahour</p>
                     </div>
                     <button
                       onClick={() => {
                         setSelectedPlaylistId('playlist_chaabi');
                         setCurrentView('playlist');
                       }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
                     >
                       Show all
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                     {CURATED_TRACKS.filter(t => t.genre === 'chaabi').map((track) => {
                       const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
                       return (
                         <div
                           key={track.id}
                           onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
+                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
                         >
-                          <div className="relative mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                             <img
                               src={track.thumbnail}
                               alt={track.title}
@@ -898,7 +899,9 @@ export default function App() {
                                 }
                               }}
                               aria-label={`Play ${track.title}`}
-                              className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                              }`}
                             >
                               {isCurrent && isPlaying ? (
                                 <Pause className="w-4 h-4 fill-current" />
@@ -907,10 +910,10 @@ export default function App() {
                               )}
                             </button>
                           </div>
-                          <div className={`font-bold text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                             {track.title}
                           </div>
-                          <div className="text-xs text-neutral-400 truncate mt-1">
+                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                             {track.artist}
                           </div>
                         </div>
@@ -921,37 +924,37 @@ export default function App() {
 
                 {/* Section 2: Rai Legends */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
                         <span>Rai Legends & Golden Era</span>
-                        <span className="text-xs font-mono font-normal text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                        <span className="text-[11px] font-mono font-normal text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
                           Timeless
                         </span>
                       </h2>
-                      <p className="text-xs text-neutral-400">Cheb Khaled, Cheb Mami, Cheb Hasni and Rachid Taha</p>
+                      <p className="text-xs text-neutral-400 mt-0.5">Cheb Khaled, Cheb Mami, Cheb Hasni and Rachid Taha</p>
                     </div>
                     <button
                       onClick={() => {
                         setSelectedPlaylistId('playlist_rai');
                         setCurrentView('playlist');
                       }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
                     >
                       Show all
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                     {CURATED_TRACKS.filter(t => t.genre === 'rai').map((track) => {
                       const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
                       return (
                         <div
                           key={track.id}
                           onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
+                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
                         >
-                          <div className="relative mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                             <img
                               src={track.thumbnail}
                               alt={track.title}
@@ -967,7 +970,9 @@ export default function App() {
                                 }
                               }}
                               aria-label={`Play ${track.title}`}
-                              className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                              }`}
                             >
                               {isCurrent && isPlaying ? (
                                 <Pause className="w-4 h-4 fill-current" />
@@ -976,10 +981,10 @@ export default function App() {
                               )}
                             </button>
                           </div>
-                          <div className={`font-bold text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                             {track.title}
                           </div>
-                          <div className="text-xs text-neutral-400 truncate mt-1">
+                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                             {track.artist}
                           </div>
                         </div>
@@ -990,37 +995,37 @@ export default function App() {
 
                 {/* Section 3: Maghreb Rap & Drill */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
                         <span>Maghreb Rap & Trap</span>
-                        <span className="text-xs font-mono font-normal text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full">
+                        <span className="text-[11px] font-mono font-normal text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
                           Heavy Hitters
                         </span>
                       </h2>
-                      <p className="text-xs text-neutral-400">ElGrandeToto, Dizzy Dros, Morad, and Soolking</p>
+                      <p className="text-xs text-neutral-400 mt-0.5">ElGrandeToto, Dizzy Dros, Morad, and Soolking</p>
                     </div>
                     <button
                       onClick={() => {
                         setSelectedPlaylistId('playlist_rap');
                         setCurrentView('playlist');
                       }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
                     >
                       Show all
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                     {CURATED_TRACKS.filter(t => t.genre === 'rap').map((track) => {
                       const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
                       return (
                         <div
                           key={track.id}
                           onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
+                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
                         >
-                          <div className="relative mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                             <img
                               src={track.thumbnail}
                               alt={track.title}
@@ -1036,7 +1041,9 @@ export default function App() {
                                 }
                               }}
                               aria-label={`Play ${track.title}`}
-                              className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                              }`}
                             >
                               {isCurrent && isPlaying ? (
                                 <Pause className="w-4 h-4 fill-current" />
@@ -1045,10 +1052,10 @@ export default function App() {
                               )}
                             </button>
                           </div>
-                          <div className={`font-bold text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                             {track.title}
                           </div>
-                          <div className="text-xs text-neutral-400 truncate mt-1">
+                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                             {track.artist}
                           </div>
                         </div>
@@ -1059,37 +1066,37 @@ export default function App() {
 
                 {/* Section 4: Global Hits */}
                 <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                    <div className="min-w-0">
+                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
                         <span>Global Chart Toppers</span>
-                        <span className="text-xs font-mono font-normal text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full">
+                        <span className="text-[11px] font-mono font-normal text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
                           Top 50
                         </span>
                       </h2>
-                      <p className="text-xs text-neutral-400">The Weeknd, Dua Lipa, Kendrick Lamar, Daft Punk</p>
+                      <p className="text-xs text-neutral-400 mt-0.5">The Weeknd, Dua Lipa, Kendrick Lamar, Daft Punk</p>
                     </div>
                     <button
                       onClick={() => {
                         setSelectedPlaylistId('playlist_global');
                         setCurrentView('playlist');
                       }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
                     >
                       Show all
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                     {CURATED_TRACKS.filter(t => t.genre === 'global').map((track) => {
                       const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
                       return (
                         <div
                           key={track.id}
                           onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
+                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
                         >
-                          <div className="relative mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                             <img
                               src={track.thumbnail}
                               alt={track.title}
@@ -1105,7 +1112,9 @@ export default function App() {
                                 }
                               }}
                               aria-label={`Play ${track.title}`}
-                              className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center opacity-0 group-hover:opacity-100 group-hover:translate-y-0 translate-y-2 shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                              }`}
                             >
                               {isCurrent && isPlaying ? (
                                 <Pause className="w-4 h-4 fill-current" />
@@ -1114,10 +1123,10 @@ export default function App() {
                               )}
                             </button>
                           </div>
-                          <div className={`font-bold text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                             {track.title}
                           </div>
-                          <div className="text-xs text-neutral-400 truncate mt-1">
+                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                             {track.artist}
                           </div>
                         </div>
@@ -1130,29 +1139,29 @@ export default function App() {
 
             {/* VIEW 4: LIBRARY VIEW */}
             {currentView === 'library' && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-bold text-white">Your Music Library</h1>
+              <div className="space-y-5 sm:space-y-6">
+                <div className="flex items-center justify-between gap-2">
+                  <h1 className="text-xl sm:text-2xl font-bold text-white">Your Music Library</h1>
                   <button
                     onClick={() => setIsCreatePlaylistOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-full bg-[#1db954] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-full bg-[#1db954] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
                   >
                     <PlusSquare className="w-4 h-4" />
                     <span>Create Playlist</span>
                   </button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div
                     onClick={() => {
                       setSelectedPlaylistId('liked');
                       setCurrentView('playlist');
                     }}
-                    className="p-6 rounded-xl bg-gradient-to-br from-indigo-800 to-purple-900 hover:scale-[1.01] transition-transform cursor-pointer shadow-lg flex flex-col justify-between h-48"
+                    className="p-5 sm:p-6 rounded-xl bg-gradient-to-br from-indigo-800 to-purple-900 hover:scale-[1.01] transition-transform cursor-pointer shadow-lg flex flex-col justify-between h-40 sm:h-48"
                   >
                     <div>
-                      <Heart className="w-8 h-8 fill-white text-white mb-3" />
-                      <h2 className="text-2xl font-extrabold text-white">Liked Songs</h2>
+                      <Heart className="w-7 h-7 sm:w-8 sm:h-8 fill-white text-white mb-2.5 sm:mb-3" />
+                      <h2 className="text-xl sm:text-2xl font-extrabold text-white">Liked Songs</h2>
                       <p className="text-xs text-neutral-300 mt-1">{likedTrackIds.size} tracks saved</p>
                     </div>
                     <span className="text-xs font-semibold text-white/80">Play your favorites</span>
@@ -1165,24 +1174,24 @@ export default function App() {
                         setSelectedPlaylistId(pl.id);
                         setCurrentView('playlist');
                       }}
-                      className="p-4 rounded-xl bg-[#181818] hover:bg-[#222222] transition-colors cursor-pointer border border-neutral-800 flex items-center gap-4"
+                      className="p-3 sm:p-4 rounded-xl bg-[#181818] hover:bg-[#222222] transition-colors cursor-pointer border border-neutral-800 flex items-center gap-3 sm:gap-4"
                     >
                       <img
                         src={pl.coverImage}
                         alt={pl.name}
-                        className="w-24 h-24 rounded-lg object-cover shrink-0"
+                        className="w-16 h-16 sm:w-24 sm:h-24 rounded-lg object-cover shrink-0"
                       />
-                      <div className="flex-1 truncate">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="text-base font-bold text-white truncate">{pl.name}</h3>
+                          <h3 className="text-sm sm:text-base font-bold text-white truncate">{pl.name}</h3>
                           {pl.isCustom && (
-                            <span className="text-[10px] bg-neutral-800 text-[#1db954] px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] bg-neutral-800 text-[#1db954] px-1.5 py-0.5 rounded font-mono shrink-0">
                               Custom
                             </span>
                           )}
                         </div>
                         <p className="text-xs text-neutral-400 line-clamp-2 mt-1">{pl.description}</p>
-                        <span className="text-xs text-[#1db954] mt-2 block font-medium">
+                        <span className="text-xs text-[#1db954] mt-1.5 sm:mt-2 block font-medium">
                           {pl.tracks.length} tracks
                         </span>
                       </div>
@@ -1324,6 +1333,16 @@ export default function App() {
         onOpenEqualizer={() => setIsEqualizerOpen(true)}
         onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
         onOpenExpandedCover={() => setIsExpandedCoverOpen(true)}
+      />
+
+      {/* Mobile Bottom Navigation Bar */}
+      <MobileNav
+        currentView={currentView}
+        onNavigate={(view) => {
+          setCurrentView(view);
+          setSelectedPlaylistId(null);
+        }}
+        onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
       />
 
       {/* Legal & Compliance Modal (Privacy Policy, Terms of Service, DMCA, Cookies) */}

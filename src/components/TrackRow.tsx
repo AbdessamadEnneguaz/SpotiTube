@@ -34,12 +34,12 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
 
   return (
     <div
-      className={`group flex items-center gap-4 px-4 py-2.5 rounded-md hover:bg-neutral-800/60 transition-colors text-sm select-none ${
+      className={`group flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2.5 rounded-md hover:bg-neutral-800/60 transition-colors text-sm select-none ${
         isCurrent ? 'bg-neutral-800/40 text-white' : 'text-neutral-400'
       }`}
     >
       {/* Index or Play / Pause Indicator */}
-      <div className="w-6 flex items-center justify-center shrink-0">
+      <div className="w-5 sm:w-6 flex items-center justify-center shrink-0">
         {isCurrent && isPlaying ? (
           <button
             onClick={() => onPlay(track)}
@@ -69,13 +69,14 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
       </div>
 
       {/* Artwork, Title & Artist */}
-      <div className="flex items-center gap-3.5 flex-1 min-w-0">
+      <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0">
         <img
           src={track.thumbnail}
           alt={track.title}
-          className="w-10 h-10 rounded object-cover shrink-0 bg-neutral-800"
+          onClick={() => onPlay(track)}
+          className="w-10 h-10 rounded object-cover shrink-0 bg-neutral-800 cursor-pointer"
         />
-        <div className="truncate">
+        <div className="truncate min-w-0 flex-1">
           <div
             onClick={() => onPlay(track)}
             className={`font-medium truncate cursor-pointer hover:underline ${
@@ -96,12 +97,12 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
       </div>
 
       {/* Quick Action Buttons */}
-      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex items-center gap-1 sm:gap-2 shrink-0">
         <button
           onClick={() => onToggleLike(track)}
           aria-label={isLiked ? "Unlike" : "Like"}
-          className={`p-1.5 transition-colors cursor-pointer ${
-            isLiked ? 'text-[#1db954]' : 'text-neutral-400 hover:text-white'
+          className={`hidden sm:inline-flex p-1.5 opacity-0 group-hover:opacity-100 transition-all cursor-pointer ${
+            isLiked ? 'text-[#1db954] opacity-100' : 'text-neutral-400 hover:text-white'
           }`}
         >
           <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
@@ -111,7 +112,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
           onClick={() => onAddToQueue(track)}
           title="Add to Queue"
           aria-label="Add to Queue"
-          className="p-1.5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+          className="hidden sm:inline-flex p-1.5 opacity-0 group-hover:opacity-100 text-neutral-400 hover:text-white transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
         </button>
@@ -123,7 +124,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
               setShowPlaylistsSubmenu(false);
             }}
             aria-label="More options"
-            className="p-1.5 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-neutral-400 hover:text-white transition-opacity cursor-pointer"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>

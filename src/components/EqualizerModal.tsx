@@ -49,8 +49,8 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 select-none">
-      <div className="bg-[#181818] border border-neutral-700 w-full max-w-xl rounded-2xl p-6 shadow-2xl relative text-white">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 select-none">
+      <div className="bg-[#181818] border border-neutral-700 w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl p-4 sm:p-6 shadow-2xl relative text-white">
         <button
           onClick={onClose}
           aria-label="Close Equalizer"
@@ -59,13 +59,13 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-10 h-10 rounded-full bg-[#1db954]/20 text-[#1db954] flex items-center justify-center">
+        <div className="flex items-center gap-3 mb-5 pr-8">
+          <div className="w-10 h-10 rounded-full bg-[#1db954]/20 text-[#1db954] flex items-center justify-center shrink-0">
             <Sliders className="w-5 h-5" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold">Audio Equalizer & Sound Quality</h2>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base sm:text-lg font-bold">Audio Equalizer & Sound Quality</h2>
               <span className="text-[10px] bg-gradient-to-r from-amber-400 to-[#1db954] text-black font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
                 Premium
               </span>
@@ -75,8 +75,8 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
         </div>
 
         {/* Streaming Quality Selector (Premium Unlocked) */}
-        <div className="bg-[#121212] p-4 rounded-xl border border-neutral-800 mb-5 space-y-3">
-          <div className="flex items-center justify-between">
+        <div className="bg-[#121212] p-3.5 sm:p-4 rounded-xl border border-neutral-800 mb-5 space-y-3">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-neutral-300">
               Streaming Audio Quality
             </span>
@@ -89,12 +89,12 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
             {[
               { id: 'normal', label: 'Normal (96k)' },
               { id: 'high', label: 'High (160k)' },
-              { id: 'very_high_320k', label: 'Very High (320k Master)' }
+              { id: 'very_high_320k', label: 'Very High (320k)' }
             ].map(q => (
               <button
                 key={q.id}
                 onClick={() => onChangeAudioQuality(q.id as any)}
-                className={`py-2 px-2.5 rounded-lg text-xs font-semibold text-center border transition-all cursor-pointer ${
+                className={`py-2 px-2 rounded-lg text-[11px] sm:text-xs font-semibold text-center border transition-all cursor-pointer ${
                   audioQuality === q.id
                     ? 'bg-[#1db954] text-black border-[#1db954] font-bold shadow-md'
                     : 'bg-neutral-800/60 border-neutral-700 text-neutral-300 hover:bg-neutral-700'
@@ -129,8 +129,8 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
         </div>
 
         {/* 5-Band Slider Controls */}
-        <div className="bg-[#121212] p-4 rounded-xl border border-neutral-800 mb-5">
-          <div className="grid grid-cols-5 gap-3 text-center">
+        <div className="bg-[#121212] p-3.5 sm:p-4 rounded-xl border border-neutral-800 mb-5">
+          <div className="grid grid-cols-5 gap-2 sm:gap-3 text-center">
             {[
               { label: '60 Hz', key: 'bass' as const, val: settings.bass },
               { label: '250 Hz', key: 'midLow' as const, val: settings.midLow },
@@ -155,9 +155,11 @@ export const EqualizerModal: React.FC<EqualizerModalProps> = ({
                       [band.key]: parseInt(e.target.value, 10)
                     });
                   }}
-                  className="h-28 accent-[#1db954] appearance-slider-vertical cursor-pointer [writing-mode:bt-lr] [-webkit-appearance:slider-vertical]"
+                  style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
+                  aria-label={`${band.label} equalizer band`}
+                  className="h-24 sm:h-28 accent-[#1db954] cursor-pointer"
                 />
-                <span className="text-[11px] font-bold text-neutral-300">{band.label}</span>
+                <span className="text-[10px] sm:text-[11px] font-bold text-neutral-300">{band.label}</span>
               </div>
             ))}
           </div>
