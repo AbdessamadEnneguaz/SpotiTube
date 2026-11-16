@@ -173,12 +173,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </button>
           </>
         ) : (
-          <div className="flex items-center gap-2 text-neutral-500">
-            <div className="w-10 h-10 rounded bg-neutral-800/60 flex items-center justify-center">
+          <div className="flex items-center gap-2.5 text-neutral-500">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded bg-neutral-800/60 flex items-center justify-center shrink-0">
               <Music2 className="w-4 h-4 text-neutral-500" />
             </div>
-            <div className="text-xs">
-              <span className="block text-neutral-400 font-medium">SpotiTube</span>
+            <div className="text-xs truncate">
+              <span className="block text-neutral-300 font-semibold truncate">SpotiTube</span>
+              <span className="block text-neutral-500 text-[10px] sm:text-xs truncate">Choose a track to play</span>
             </div>
           </div>
         )}

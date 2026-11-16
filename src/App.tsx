@@ -136,11 +136,11 @@ export default function App() {
     return [...PLAYLISTS, ...customPlaylists];
   }, [customPlaylists]);
 
-  // Player State
-  const [currentTrack, setCurrentTrack] = useState<Track | null>(CURATED_TRACKS[0]);
+  // Player State (No default track — user chooses their own music)
+  const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(CURATED_TRACKS[0].durationSeconds);
+  const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(85);
   const [isMuted, setIsMuted] = useState(false);
   const [repeatMode, setRepeatMode] = useState<RepeatMode>('off');
@@ -148,9 +148,10 @@ export default function App() {
   const [seekTarget, setSeekTarget] = useState<number | null>(null);
 
   // Queue & History
-  const [queue, setQueue] = useState<Track[]>(CURATED_TRACKS);
+  const [queue, setQueue] = useState<Track[]>([]);
   const [queueIndex, setQueueIndex] = useState(0);
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
+  const failedFallbackIdsRef = useRef<Set<string>>(new Set());
 
   // User Liked Songs (Stored in localStorage)
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(() => {
@@ -270,7 +271,7 @@ export default function App() {
       setSearchResults(res.tracks);
       setIsSearching(false);
       if (res.source === 'local_backend') {
-        setSearchStatusMsg(`Live results via yt-dlp (${res.tracks.length} tracks)`);
+        setSearchStatusMsg(`Live results (${res.tracks.length} tracks)`);
       } else {
         setSearchStatusMsg(res.message || `Catalog matches (${res.tracks.length} tracks)`);
       }
@@ -431,6 +432,37 @@ export default function App() {
       }
     }
   }, [handleNext, repeatMode]);
+
+  const fallbackAttemptsRef = useRef<Record<string, number>>({});
+
+  const handleTrackError = useCallback(async (failedTrack: Track, errorCode: number) => {
+    // Codes 100, 101, 150 indicate video unavailable or embedding restricted by uploader
+    if (errorCode === 100 || errorCode === 101 || errorCode === 150) {
+      failedFallbackIdsRef.current.add(failedTrack.youtubeId);
+      const attempts = fallbackAttemptsRef.current[failedTrack.id] || 0;
+      if (attempts < 1) {
+        fallbackAttemptsRef.current[failedTrack.id] = attempts + 1;
+        try {
+          const res = await searchYouTube(`${failedTrack.title} ${failedTrack.artist} audio`);
+          const alternative = res.tracks.find(
+            (t) => t.youtubeId && !failedFallbackIdsRef.current.has(t.youtubeId)
+          );
+          if (alternative) {
+            setCurrentTrack((prev) =>
+              prev && prev.id === failedTrack.id
+                ? { ...prev, youtubeId: alternative.youtubeId, thumbnail: alternative.thumbnail }
+                : prev
+            );
+            setIsPlaying(true);
+            return;
+          }
+        } catch {
+          // ignore fallback search errors
+        }
+      }
+    }
+    setIsPlaying(false);
+  }, []);
 
   const lastTimeRef = useRef(0);
   const handleTimeUpdate = useCallback((curr: number, dur: number) => {
@@ -1249,6 +1281,7 @@ export default function App() {
         onClearSeek={() => setSeekTarget(null)}
         onTimeUpdate={handleTimeUpdate}
         onPlayerStateChange={handlePlayerStateChange}
+        onTrackError={handleTrackError}
         isVisible={isVideoVisible}
         onCloseVideo={() => setIsVideoVisible(false)}
       />
@@ -1267,7 +1300,7 @@ export default function App() {
         isQueueOpen={isQueueOpen}
         isVideoVisible={isVideoVisible}
         activeSleepTimer={sleepTimerMinutes}
-        queueCount={queue.length - queueIndex - 1}
+        queueCount={queue.length > 0 ? Math.max(0, queue.length - queueIndex - 1) : 0}
         onPlayPause={handlePlayPause}
         onNext={handleNext}
         onPrevious={handlePrevious}

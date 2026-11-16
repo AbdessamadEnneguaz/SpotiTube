@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { loadYouTubeIFrameAPI } from '../services/youtubeApi';
 import { YTPlayerInstance } from '../types/youtube';
 import { Track } from '../types/music';
-import { X, ExternalLink, Tv, Minimize2, Maximize2 } from 'lucide-react';
+import { X, Minimize2, Maximize2 } from 'lucide-react';
 
 interface YouTubePlayerEmbedProps {
   currentTrack: Track | null;
@@ -13,6 +13,7 @@ interface YouTubePlayerEmbedProps {
   onClearSeek: () => void;
   onTimeUpdate: (currentTime: number, duration: number) => void;
   onPlayerStateChange: (state: 'playing' | 'paused' | 'ended' | 'buffering') => void;
+  onTrackError?: (track: Track, errorCode: number) => void;
   isVisible: boolean;
   onCloseVideo: () => void;
 }
@@ -26,26 +27,99 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   onClearSeek,
   onTimeUpdate,
   onPlayerStateChange,
+  onTrackError,
   isVisible,
   onCloseVideo
 }) => {
   const playerRef = useRef<YTPlayerInstance | null>(null);
-  const playerReadyRef = useRef<boolean>(false);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const currentTrackRef = useRef<Track | null>(currentTrack);
+  const isPlayingRef = useRef<boolean>(isPlaying);
+  const volumeRef = useRef<number>(volume);
+  const isMutedRef = useRef<boolean>(isMuted);
+  const onTimeUpdateRef = useRef(onTimeUpdate);
+  const onPlayerStateChangeRef = useRef(onPlayerStateChange);
+  const onTrackErrorRef = useRef(onTrackError);
+  const isCreatingRef = useRef<boolean>(false);
+
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Initialize YT Player once
   useEffect(() => {
-    let timer: any = null;
+    currentTrackRef.current = currentTrack;
+  }, [currentTrack]);
+
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+    isMutedRef.current = isMuted;
+  }, [volume, isMuted]);
+
+  useEffect(() => {
+    onTimeUpdateRef.current = onTimeUpdate;
+    onPlayerStateChangeRef.current = onPlayerStateChange;
+    onTrackErrorRef.current = onTrackError;
+  }, [onTimeUpdate, onPlayerStateChange, onTrackError]);
+
+  // Pre-warm YouTube IFrame API script on mount & maintain playback time ticker
+  useEffect(() => {
+    loadYouTubeIFrameAPI().catch(() => {});
+
+    const timer = setInterval(() => {
+      const p = playerRef.current;
+      if (p && typeof p.getCurrentTime === 'function') {
+        try {
+          const cur = p.getCurrentTime() || 0;
+          const dur = p.getDuration() || 0;
+          onTimeUpdateRef.current(cur, dur);
+        } catch {
+          // ignore transient ticks
+        }
+      }
+    }, 150);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, []);
+
+  // Lazily initialize YT Player on first user track selection, and load subsequent tracks
+  useEffect(() => {
+    if (!currentTrack) return;
+
+    if (playerRef.current && isPlayerReady) {
+      try {
+        playerRef.current.loadVideoById(currentTrack.youtubeId, 0);
+        if (isPlayingRef.current) {
+          playerRef.current.playVideo();
+        }
+      } catch (e) {
+        console.warn('Error loading video by ID:', e);
+      }
+      return;
+    }
+
+    if (isCreatingRef.current) return;
+    isCreatingRef.current = true;
 
     loadYouTubeIFrameAPI().then(() => {
-      if (!window.YT || !window.YT.Player) return;
+      if (!window.YT || !window.YT.Player) {
+        isCreatingRef.current = false;
+        return;
+      }
 
-      const player = new window.YT.Player('spotitube-iframe-anchor', {
+      const initialTrack = currentTrackRef.current;
+      if (!initialTrack) {
+        isCreatingRef.current = false;
+        return;
+      }
+
+      new window.YT.Player('spotitube-iframe-anchor', {
         height: '100%',
         width: '100%',
-        videoId: currentTrack ? currentTrack.youtubeId : undefined,
+        videoId: initialTrack.youtubeId,
         playerVars: {
           autoplay: 1,
           controls: 1,
@@ -58,65 +132,48 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         events: {
           onReady: (event) => {
             playerRef.current = event.target;
-            playerReadyRef.current = true;
+            isCreatingRef.current = false;
             setIsPlayerReady(true);
-            event.target.setVolume(volume);
-            if (isMuted) event.target.mute();
+            event.target.setVolume(volumeRef.current);
+            if (isMutedRef.current) {
+              event.target.mute();
+            } else {
+              event.target.unMute();
+            }
+            const latest = currentTrackRef.current;
+            if (latest && latest.youtubeId !== initialTrack.youtubeId) {
+              event.target.loadVideoById(latest.youtubeId, 0);
+            }
+            if (isPlayingRef.current) {
+              event.target.playVideo();
+            }
           },
           onStateChange: (event) => {
             const state = event.data;
             if (state === 1) {
-              onPlayerStateChange('playing');
+              onPlayerStateChangeRef.current('playing');
             } else if (state === 2) {
-              onPlayerStateChange('paused');
+              onPlayerStateChangeRef.current('paused');
             } else if (state === 0) {
-              onPlayerStateChange('ended');
+              onPlayerStateChangeRef.current('ended');
             } else if (state === 3) {
-              onPlayerStateChange('buffering');
+              onPlayerStateChangeRef.current('buffering');
             }
           },
           onError: (err) => {
             console.warn('YouTube IFrame player error code:', err.data);
+            if (currentTrackRef.current && onTrackErrorRef.current) {
+              onTrackErrorRef.current(currentTrackRef.current, err.data);
+            }
           }
         }
       });
     });
-
-    // High-precision time ticker (150ms) for real-time karaoke synchronization
-    timer = setInterval(() => {
-      const p = playerRef.current;
-      if (p && typeof p.getCurrentTime === 'function') {
-        try {
-          const cur = p.getCurrentTime() || 0;
-          const dur = p.getDuration() || 0;
-          onTimeUpdate(cur, dur);
-        } catch {
-          // ignore transient ticks
-        }
-      }
-    }, 150);
-
-    return () => {
-      if (timer) clearInterval(timer);
-    };
-  }, []);
-
-  // Sync Video ID changes
-  useEffect(() => {
-    if (!playerRef.current || !isPlayerReady || !currentTrack) return;
-    try {
-      playerRef.current.loadVideoById(currentTrack.youtubeId, 0);
-      if (isPlaying) {
-        playerRef.current.playVideo();
-      }
-    } catch (e) {
-      console.warn('Error loading video by ID:', e);
-    }
   }, [currentTrack?.youtubeId, isPlayerReady]);
 
   // Sync Play / Pause State
   useEffect(() => {
-    if (!playerRef.current || !isPlayerReady) return;
+    if (!playerRef.current || !isPlayerReady || !currentTrack) return;
     try {
       const state = playerRef.current.getPlayerState();
       if (isPlaying && state !== 1 && state !== 3) {
@@ -127,7 +184,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     } catch {
       // player might not be fully active yet
     }
-  }, [isPlaying, isPlayerReady]);
+  }, [isPlaying, isPlayerReady, currentTrack]);
 
   // Sync Volume
   useEffect(() => {
@@ -139,7 +196,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       } else {
         playerRef.current.unMute();
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }, [volume, isMuted, isPlayerReady]);
@@ -158,13 +215,12 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
 
   return (
     <div
-      ref={containerRef}
-      className={`fixed z-50 transition-all duration-300 rounded-xl overflow-hidden shadow-2xl border border-neutral-700 bg-black ${
+      className={`fixed transition-all duration-300 rounded-xl overflow-hidden shadow-2xl border border-neutral-700 bg-black ${
         isVisible
           ? isExpanded
-            ? 'bottom-28 right-6 w-[560px] h-[340px]'
-            : 'bottom-28 right-6 w-[360px] h-[220px]'
-          : 'bottom-0 right-0 w-[1px] h-[1px] opacity-0 pointer-events-none'
+            ? 'z-50 bottom-28 right-6 w-[560px] h-[340px]'
+            : 'z-50 bottom-28 right-6 w-[360px] h-[220px]'
+          : '-z-10 bottom-0 right-0 w-[220px] h-[220px] opacity-0 pointer-events-none'
       }`}
     >
       {/* Floating Header */}
