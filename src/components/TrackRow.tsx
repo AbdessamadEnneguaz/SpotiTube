@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, Pause, Heart, Plus, MoreHorizontal, Check, FolderPlus, Sparkles } from 'lucide-react';
 import { Track, Playlist } from '../types/music';
+import { CoverImage } from './CoverImage';
 
 interface TrackRowProps {
   track: Track;
@@ -70,9 +71,10 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
 
       {/* Artwork, Title & Artist */}
       <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0">
-        <img
+        <CoverImage
           src={track.thumbnail}
           alt={track.title}
+          youtubeId={track.youtubeId}
           onClick={() => onPlay(track)}
           className="w-10 h-10 rounded object-cover shrink-0 bg-neutral-800 cursor-pointer"
         />

@@ -4,7 +4,7 @@
 @keyframes viewFadeSlide {
   0% {
     opacity: 0;
-    transform: translateY(14px);
+    transform: translateY(12px);
   }
   100% {
     opacity: 1;
@@ -13,24 +13,51 @@
 }
 
 .animate-view-fade-slide {
-  animation: viewFadeSlide 280ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: viewFadeSlide 260ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
   will-change: opacity, transform;
 }
 
-/* Subtle staggered item fade-in for track grids and rows */
-@keyframes itemFadeUp {
+/* Lightweight dropdown reveal for search history & menus */
+@keyframes dropdownReveal {
   0% {
     opacity: 0;
-    transform: translateY(8px);
+    transform: translateY(-6px) scale(0.98);
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 
-.animate-item-fade-up {
-  animation: itemFadeUp 220ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+.animate-dropdown-reveal {
+  animation: dropdownReveal 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* GPU-composited card hover & tap micro-interactions */
+.card-interactive {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1), background-color 200ms ease;
+}
+
+.card-interactive:hover {
+  transform: translateY(-3px);
+}
+
+.card-interactive:active {
+  transform: scale(0.98);
+}
+
+/* Subtle active playing pulse ring (GPU opacity only) */
+@keyframes activePulse {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.animate-playing-glow {
+  animation: activePulse 2.2s ease-in-out infinite;
 }
 
 /* Hide horizontal scrollbars for touch-friendly category strips on mobile */
@@ -41,4 +68,16 @@
 
 .scrollbar-none::-webkit-scrollbar {
   display: none;
+}
+
+/* Respect accessibility reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .animate-view-fade-slide,
+  .animate-dropdown-reveal,
+  .animate-playing-glow {
+    animation: none !important;
+  }
+  .card-interactive {
+    transition: none !important;
+  }
 }

@@ -14,12 +14,12 @@ import {
   Maximize2,
   Music2,
   Heart,
-  Sliders,
   Moon,
   Sparkles
 } from 'lucide-react';
 import { Track, RepeatMode } from '../types/music';
 import { formatDuration } from '../utils/formatters';
+import { CoverImage } from './CoverImage';
 
 interface PlayerBarProps {
   currentTrack: Track | null;
@@ -46,7 +46,6 @@ interface PlayerBarProps {
   onToggleLike: (track: Track) => void;
   onToggleQueue: () => void;
   onToggleVideo: () => void;
-  onOpenEqualizer: () => void;
   onOpenSleepTimer: () => void;
   onOpenExpandedCover?: () => void;
 }
@@ -74,7 +73,6 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   onToggleRepeat,
   onToggleLike,
   onToggleQueue,
-  onOpenEqualizer,
   onOpenSleepTimer,
   onOpenExpandedCover
 }) => {
@@ -103,7 +101,6 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
     <footer className="bg-[#181818] border-t border-neutral-800 text-neutral-400 select-none z-40 relative shrink-0">
       {/* MOBILE MINI-PLAYER (< sm) */}
       <div className="sm:hidden flex flex-col relative">
-        {/* Top thin progress bar */}
         <div className="w-full h-0.5 bg-neutral-800 overflow-hidden">
           <div
             className="h-full bg-[#1db954] transition-all duration-200"
@@ -112,7 +109,6 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
         </div>
 
         <div className="h-16 px-3 flex items-center justify-between gap-2.5">
-          {/* Track info (tappable to expand cover player) */}
           <div className="flex items-center gap-2.5 flex-1 min-w-0">
             {currentTrack ? (
               <button
@@ -121,9 +117,11 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 className="flex items-center gap-2.5 flex-1 min-w-0 text-left cursor-pointer"
                 aria-label={`Open player for ${currentTrack.title}`}
               >
-                <img
+                <CoverImage
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
+                  youtubeId={currentTrack.youtubeId}
+                  loading="eager"
                   className="w-10 h-10 rounded-md object-cover shadow bg-neutral-800 shrink-0"
                 />
                 <div className="min-w-0 flex-1">
@@ -146,14 +144,13 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                   <Music2 className="w-4 h-4 text-neutral-500" />
                 </div>
                 <div className="min-w-0">
-                  <span className="block text-xs font-semibold text-neutral-200 truncate">SpotiTube</span>
-                  <span className="block text-[11px] text-neutral-500 truncate">Choose a track to play</span>
+                  <span className="block text-xs font-semibold text-neutral-200 truncate">Ready to listen</span>
+                  <span className="block text-[11px] text-neutral-500 truncate">Pick any track to start playing</span>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Mobile Mini-Player Controls */}
           <div className="flex items-center gap-1 shrink-0">
             {currentTrack && (
               <button
@@ -222,9 +219,11 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 onClick={onOpenExpandedCover}
                 title="Expand Album Cover Artwork"
               >
-                <img
+                <CoverImage
                   src={currentTrack.thumbnail}
                   alt={currentTrack.title}
+                  youtubeId={currentTrack.youtubeId}
+                  loading="eager"
                   className="w-14 h-14 rounded object-cover shadow-md bg-neutral-800 transition-transform group-hover:scale-105"
                 />
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity rounded">
@@ -232,11 +231,10 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 </div>
               </div>
 
-              {/* Dynamic Sound Wave Indicator & Music Badge */}
               <div className="flex items-center gap-2 min-w-0 flex-1">
                 <div
-                  className="flex items-end gap-[2px] h-3.5 px-1 py-0.5 rounded bg-black/60 border border-[#1db954]/30 shadow-[0_0_8px_rgba(29,185,84,0.15)] shrink-0"
-                  title={isPlaying ? "Playing Lossless HiFi Audio" : "Playback Paused"}
+                  className="flex items-end gap-[2px] h-3.5 px-1 py-0.5 rounded bg-black/60 border border-[#1db954]/30 shrink-0"
+                  title={isPlaying ? "Playing Now" : "Paused"}
                 >
                   <span className={`w-[2px] rounded-full bg-[#1db954] transition-all duration-300 ${isPlaying ? 'animate-[bounce_0.8s_ease-in-out_infinite] h-3.5' : 'h-1.5'}`} />
                   <span className={`w-[2px] rounded-full bg-[#1db954] transition-all duration-300 ${isPlaying ? 'animate-[bounce_0.6s_ease-in-out_infinite_0.15s] h-2.5' : 'h-2'}`} />
@@ -261,10 +259,6 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                     >
                       {currentTrack.artist}
                     </div>
-                    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full bg-[#1db954]/10 border border-[#1db954]/30 text-[#1db954] text-[8.5px] font-mono font-bold tracking-wider shrink-0">
-                      <span className="w-1 h-1 rounded-full bg-[#1db954] animate-pulse" />
-                      Hi-Fi
-                    </span>
                   </div>
                 </div>
               </div>
@@ -286,8 +280,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 <Music2 className="w-4 h-4 text-neutral-500" />
               </div>
               <div className="text-xs truncate">
-                <span className="block text-neutral-300 font-semibold truncate">SpotiTube</span>
-                <span className="block text-neutral-500 text-xs truncate">Choose a track to play</span>
+                <span className="block text-neutral-300 font-semibold truncate">Ready to listen</span>
+                <span className="block text-neutral-500 text-xs truncate">Pick any track to start playing</span>
               </div>
             </div>
           )}
@@ -369,7 +363,6 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </button>
           </div>
 
-          {/* Progress Seekbar Row */}
           <div className="w-full flex items-center gap-2 text-[11px] font-mono text-neutral-400">
             <span className="w-10 text-right">{formatDuration(displayTime)}</span>
 
@@ -401,18 +394,8 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
           </div>
         </div>
 
-        {/* RIGHT: Equalizer, Sleep Timer, Queue & Volume */}
+        {/* RIGHT: Sleep Timer, Queue & Volume */}
         <div className="flex items-center justify-end gap-2.5 w-1/4 min-w-[200px]">
-          <button
-            type="button"
-            onClick={onOpenEqualizer}
-            title="Equalizer & 320kbps Audio (Premium)"
-            aria-label="Equalizer settings"
-            className="p-1.5 rounded text-neutral-400 hover:text-white transition-colors cursor-pointer"
-          >
-            <Sliders className="w-4 h-4" />
-          </button>
-
           <button
             type="button"
             onClick={onOpenSleepTimer}
@@ -447,7 +430,6 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             )}
           </button>
 
-          {/* Volume controls */}
           <div className="hidden lg:flex items-center gap-2 w-24 group">
             <button
               type="button"

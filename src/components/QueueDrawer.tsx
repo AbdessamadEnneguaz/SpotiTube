@@ -1,6 +1,7 @@
 import React from 'react';
 import { X, Trash2, ChevronUp, ChevronDown, Play, Music } from 'lucide-react';
 import { Track } from '../types/music';
+import { CoverImage } from './CoverImage';
 
 interface QueueDrawerProps {
   isOpen: boolean;
@@ -54,10 +55,11 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
           </div>
           {currentTrack ? (
             <div className="bg-[#181818] p-3 rounded-lg flex items-center gap-3 border border-neutral-800 shadow">
-              <img
+              <CoverImage
                 src={currentTrack.thumbnail}
                 alt={currentTrack.title}
-                className="w-12 h-12 rounded object-cover shrink-0"
+                youtubeId={currentTrack.youtubeId}
+                className="w-12 h-12 rounded object-cover shrink-0 bg-neutral-800"
               />
               <div className="truncate flex-1">
                 <div className="text-sm font-bold text-[#1db954] truncate">
@@ -113,10 +115,11 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
                       <Play className="w-3 h-3 fill-current translate-x-0.2" />
                     </button>
 
-                    <img
+                    <CoverImage
                       src={track.thumbnail}
                       alt={track.title}
-                      className="w-9 h-9 rounded object-cover shrink-0"
+                      youtubeId={track.youtubeId}
+                      className="w-9 h-9 rounded object-cover shrink-0 bg-neutral-800"
                     />
 
                     <div className="truncate flex-1 min-w-0">

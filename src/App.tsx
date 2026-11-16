@@ -12,7 +12,6 @@ import {
   Compass,
   Radio,
   Search,
-  Sliders,
   Moon,
   PlusSquare
 } from 'lucide-react';
@@ -25,12 +24,12 @@ import { QueueDrawer } from './components/QueueDrawer';
 import { RecentSearches } from './components/RecentSearches';
 import { LegalModal } from './components/LegalModal';
 import { ExpandedCoverModal } from './components/ExpandedCoverModal';
-import { EqualizerModal } from './components/EqualizerModal';
 import { SleepTimerModal } from './components/SleepTimerModal';
 import { CreatePlaylistModal } from './components/CreatePlaylistModal';
 import { YouTubePlayerEmbed } from './components/YouTubePlayerEmbed';
+import { CoverImage } from './components/CoverImage';
 import { CURATED_TRACKS, PLAYLISTS } from './data/curatedTracks';
-import { Track, Playlist, RepeatMode, EqualizerSettings } from './types/music';
+import { Track, Playlist, RepeatMode } from './types/music';
 import { searchYouTube } from './services/youtubeApi';
 import {
   getNextIndex,
@@ -91,23 +90,10 @@ export default function App() {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [isExpandedCoverOpen, setIsExpandedCoverOpen] = useState(false);
-  const [isEqualizerOpen, setIsEqualizerOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [legalTab, setLegalTab] = useState<'privacy' | 'terms' | 'dmca' | 'cookies'>('privacy');
-
-  // Equalizer & Audio Quality Settings
-  const [eqSettings, setEqSettings] = useState<EqualizerSettings>({
-    preset: 'bass_boost',
-    bass: 6,
-    midLow: 4,
-    mid: 1,
-    midHigh: 2,
-    treble: 3
-  });
-  const [audioQuality, setAudioQuality] = useState<'normal' | 'high' | 'very_high_320k'>('very_high_320k');
-  const [crossfade, setCrossfade] = useState(3);
 
   // Sleep Timer state
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
@@ -499,7 +485,6 @@ export default function App() {
             setLegalTab(tab || 'privacy');
             setIsLegalOpen(true);
           }}
-          onOpenEqualizer={() => setIsEqualizerOpen(true)}
           onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
         />
 
@@ -509,6 +494,7 @@ export default function App() {
           <Header
             currentView={currentView}
             searchQuery={searchQuery}
+            recentSearches={recentSearches}
             onSearchChange={(q) => {
               setSearchQuery(q);
               if (currentView !== 'search' && q.trim()) {
@@ -518,10 +504,13 @@ export default function App() {
             onSubmitSearch={(term) => {
               handleAddRecentSearch(term);
             }}
+            onSelectRecentSearch={handleSelectRecentSearch}
+            onRemoveRecentSearch={handleRemoveRecentSearch}
+            onClearRecentSearches={handleClearAllRecentSearches}
             selectedGenre={selectedGenre}
             onGenreSelect={(genre) => {
               setSelectedGenre(genre);
-              if (currentView === 'playlist') {
+              if (currentView !== 'home') {
                 setCurrentView('home');
                 setSelectedPlaylistId(null);
               }
@@ -530,7 +519,6 @@ export default function App() {
               setLegalTab(tab || 'privacy');
               setIsLegalOpen(true);
             }}
-            onOpenEqualizer={() => setIsEqualizerOpen(true)}
             onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
             onBack={() => {
               if (selectedPlaylistId) {
@@ -556,9 +544,11 @@ export default function App() {
               <div className="space-y-5 sm:space-y-6">
                 {/* Playlist Banner */}
                 <div className="flex flex-col md:flex-row items-center md:items-end text-center md:text-left gap-4 sm:gap-6 bg-gradient-to-b from-neutral-800/80 to-[#121212] p-4 sm:p-6 rounded-2xl border border-neutral-800 shadow-xl">
-                  <img
+                  <CoverImage
                     src={activePlaylist.coverImage}
                     alt={activePlaylist.name}
+                    youtubeId={activePlaylist.tracks[0]?.youtubeId}
+                    loading="eager"
                     className="w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48 rounded-xl object-cover shadow-2xl shadow-black/80 shrink-0"
                   />
                   <div className="flex-1 space-y-2 min-w-0 w-full">
@@ -566,8 +556,8 @@ export default function App() {
                       <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">
                         {activePlaylist.isCustom ? 'Custom Playlist' : 'Playlist'}
                       </span>
-                      <span className="text-[10px] bg-[#1db954] text-black font-extrabold px-1.5 py-0.2 rounded-full">
-                        PREMIUM
+                      <span className="text-[10px] bg-[#1db954] text-black font-extrabold px-2 py-0.5 rounded-full">
+                        {activePlaylist.isCustom ? 'CUSTOM MIX' : 'CURATED MIX'}
                       </span>
                     </div>
                     <h1 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-white tracking-tight break-words">
@@ -577,7 +567,7 @@ export default function App() {
                       {activePlaylist.description}
                     </p>
                     <div className="flex items-center justify-center md:justify-start gap-2 text-xs text-neutral-400 pt-1">
-                      <span className="font-semibold text-white">SpotiTube Premium</span>
+                      <span className="font-semibold text-white">SpotiTube Collection</span>
                       <span>•</span>
                       <span>{activePlaylist.tracks.length} songs</span>
                     </div>
@@ -673,31 +663,31 @@ export default function App() {
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                         <div
                           onClick={() => handleSelectRecentSearch('Moroccan Chaabi')}
-                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-emerald-600 to-teal-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-emerald-600 to-teal-900 cursor-pointer flex flex-col justify-between shadow-md"
                         >
                           <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Moroccan Chaabi</span>
                           <span className="text-[10px] sm:text-[11px] text-emerald-200 truncate">Daoudi, Senhaji, Stati</span>
                         </div>
                         <div
                           onClick={() => handleSelectRecentSearch('Rai Classics')}
-                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-amber-600 to-rose-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-amber-600 to-rose-900 cursor-pointer flex flex-col justify-between shadow-md"
                         >
-                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Rai Legends</span>
+                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Rai Golden Era</span>
                           <span className="text-[10px] sm:text-[11px] text-amber-200 truncate">Khaled, Mami, Hasni</span>
                         </div>
                         <div
                           onClick={() => handleSelectRecentSearch('Maghreb Rap 7elmetado')}
-                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-purple-700 to-rose-900 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-purple-700 to-rose-900 cursor-pointer flex flex-col justify-between shadow-md"
                         >
-                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Maghreb Rap & Drill</span>
+                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Maghreb Rap & Trap</span>
                           <span className="text-[10px] sm:text-[11px] text-purple-200 truncate">ElGrandeToto, Dizzy Dros</span>
                         </div>
                         <div
                           onClick={() => handleSelectRecentSearch('Top Worldwide Hits')}
-                          className="h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-blue-600 to-indigo-950 cursor-pointer hover:scale-[1.02] transition-transform flex flex-col justify-between shadow-md"
+                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-blue-600 to-indigo-950 cursor-pointer flex flex-col justify-between shadow-md"
                         >
                           <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Global Hits</span>
-                          <span className="text-[10px] sm:text-[11px] text-blue-200 truncate">Top 50 Chart Toppers</span>
+                          <span className="text-[10px] sm:text-[11px] text-blue-200 truncate">Chart Favorites</span>
                         </div>
                       </div>
                     </section>
@@ -757,7 +747,7 @@ export default function App() {
                     {isSearching ? (
                       <div className="flex items-center justify-center py-16 text-neutral-400 gap-3">
                         <div className="w-5 h-5 border-2 border-[#1db954] border-t-transparent rounded-full animate-spin" />
-                        <span className="text-sm">Searching YouTube catalog...</span>
+                        <span className="text-sm">Searching live music catalog...</span>
                       </div>
                     ) : searchResults.length === 0 ? (
                       <div className="text-center py-16 text-neutral-400 space-y-2">
@@ -799,7 +789,7 @@ export default function App() {
               </div>
             )}
 
-            {/* VIEW 3: HOME DASHBOARD (SPOTIFY EXACT EXPERIENCE) */}
+            {/* VIEW 3: HOME DASHBOARD */}
             {currentView === 'home' && (
               <div className="space-y-7 sm:space-y-8">
                 {/* Greeting & Quick Access Cards */}
@@ -824,11 +814,13 @@ export default function App() {
                           setSelectedPlaylistId(item.id);
                           setCurrentView('playlist');
                         }}
-                        className="group flex items-center bg-[#282828]/70 hover:bg-[#323232] rounded-md overflow-hidden transition-all duration-200 cursor-pointer shadow-sm relative"
+                        className="card-interactive group flex items-center bg-[#282828]/70 hover:bg-[#323232] rounded-md overflow-hidden cursor-pointer shadow-sm relative"
                       >
-                        <img
+                        <CoverImage
                           src={item.coverImage}
                           alt={item.name}
+                          youtubeId={item.tracks[0]?.youtubeId}
+                          loading="eager"
                           className="w-12 h-12 sm:w-16 sm:h-16 object-cover shrink-0"
                         />
                         <div className="px-2.5 sm:px-3.5 flex-1 min-w-0 font-bold text-xs sm:text-sm text-white line-clamp-2 sm:truncate">
@@ -851,289 +843,313 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Section 1: Moroccan Chaabi Ambiance */}
-                <div>
-                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                    <div className="min-w-0">
-                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                        <span>Moroccan Chaabi Ambiance</span>
-                        <span className="text-[11px] font-mono font-normal text-[#1db954] bg-[#1db954]/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                          Authentic Groove
-                        </span>
-                      </h2>
-                      <p className="text-xs text-neutral-400 mt-0.5">The masters of rhythm: Daoudi, Senhaji, Najat Aatabou, Stati & Tahour</p>
+                {/* Section 1: Moroccan Chaabi Classics */}
+                {(selectedGenre === 'all' || selectedGenre === 'chaabi') && (
+                  <div>
+                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                      <div className="min-w-0">
+                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
+                          <span>Moroccan Chaabi Classics</span>
+                          <span className="text-[11px] font-mono font-normal text-[#1db954] bg-[#1db954]/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            Heritage
+                          </span>
+                        </h2>
+                        <p className="text-xs text-neutral-400 mt-0.5">Iconic grooves by Daoudi, Senhaji, Najat Aatabou, Stati & Tahour</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedPlaylistId('playlist_chaabi');
+                          setCurrentView('playlist');
+                        }}
+                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
+                      >
+                        Show all
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedPlaylistId('playlist_chaabi');
-                        setCurrentView('playlist');
-                      }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                    >
-                      Show all
-                    </button>
-                  </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                    {CURATED_TRACKS.filter(t => t.genre === 'chaabi').map((track) => {
-                      const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
-                        >
-                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                            <img
-                              src={track.thumbnail}
-                              alt={track.title}
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isCurrent && isPlaying) {
-                                  handlePlayPause();
-                                } else {
-                                  handlePlayTrack(track);
-                                }
-                              }}
-                              aria-label={`Play ${track.title}`}
-                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                              }`}
-                            >
-                              {isCurrent && isPlaying ? (
-                                <Pause className="w-4 h-4 fill-current" />
-                              ) : (
-                                <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                              )}
-                            </button>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                      {CURATED_TRACKS.filter(t => t.genre === 'chaabi').map((track) => {
+                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        return (
+                          <div
+                            key={track.id}
+                            onClick={() => handlePlayTrack(track)}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
+                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
+                            }`}
+                          >
+                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                              <CoverImage
+                                src={track.thumbnail}
+                                alt={track.title}
+                                youtubeId={track.youtubeId}
+                                loading="eager"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isCurrent && isPlaying) {
+                                    handlePlayPause();
+                                  } else {
+                                    handlePlayTrack(track);
+                                  }
+                                }}
+                                aria-label={`Play ${track.title}`}
+                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                              >
+                                {isCurrent && isPlaying ? (
+                                  <Pause className="w-4 h-4 fill-current" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                )}
+                              </button>
+                            </div>
+                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                              {track.title}
+                            </div>
+                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
+                              {track.artist}
+                            </div>
                           </div>
-                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                            {track.title}
-                          </div>
-                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                            {track.artist}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Section 2: Rai Legends */}
-                <div>
-                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                    <div className="min-w-0">
-                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                        <span>Rai Legends & Golden Era</span>
-                        <span className="text-[11px] font-mono font-normal text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                          Timeless
-                        </span>
-                      </h2>
-                      <p className="text-xs text-neutral-400 mt-0.5">Cheb Khaled, Cheb Mami, Cheb Hasni and Rachid Taha</p>
+                        );
+                      })}
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedPlaylistId('playlist_rai');
-                        setCurrentView('playlist');
-                      }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                    >
-                      Show all
-                    </button>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                    {CURATED_TRACKS.filter(t => t.genre === 'rai').map((track) => {
-                      const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
-                        >
-                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                            <img
-                              src={track.thumbnail}
-                              alt={track.title}
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isCurrent && isPlaying) {
-                                  handlePlayPause();
-                                } else {
-                                  handlePlayTrack(track);
-                                }
-                              }}
-                              aria-label={`Play ${track.title}`}
-                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                              }`}
-                            >
-                              {isCurrent && isPlaying ? (
-                                <Pause className="w-4 h-4 fill-current" />
-                              ) : (
-                                <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                              )}
-                            </button>
-                          </div>
-                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                            {track.title}
-                          </div>
-                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                            {track.artist}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Section 3: Maghreb Rap & Drill */}
-                <div>
-                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                    <div className="min-w-0">
-                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                        <span>Maghreb Rap & Trap</span>
-                        <span className="text-[11px] font-mono font-normal text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                          Heavy Hitters
-                        </span>
-                      </h2>
-                      <p className="text-xs text-neutral-400 mt-0.5">ElGrandeToto, Dizzy Dros, Morad, and Soolking</p>
+                {/* Section 2: Rai Golden Era */}
+                {(selectedGenre === 'all' || selectedGenre === 'rai') && (
+                  <div>
+                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                      <div className="min-w-0">
+                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
+                          <span>Rai Golden Era</span>
+                          <span className="text-[11px] font-mono font-normal text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            Legends
+                          </span>
+                        </h2>
+                        <p className="text-xs text-neutral-400 mt-0.5">Unforgettable classics by Cheb Khaled, Cheb Mami, Cheb Hasni & Rachid Taha</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedPlaylistId('playlist_rai');
+                          setCurrentView('playlist');
+                        }}
+                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
+                      >
+                        Show all
+                      </button>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedPlaylistId('playlist_rap');
-                        setCurrentView('playlist');
-                      }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                    >
-                      Show all
-                    </button>
-                  </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                    {CURATED_TRACKS.filter(t => t.genre === 'rap').map((track) => {
-                      const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
-                        >
-                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                            <img
-                              src={track.thumbnail}
-                              alt={track.title}
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isCurrent && isPlaying) {
-                                  handlePlayPause();
-                                } else {
-                                  handlePlayTrack(track);
-                                }
-                              }}
-                              aria-label={`Play ${track.title}`}
-                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                              }`}
-                            >
-                              {isCurrent && isPlaying ? (
-                                <Pause className="w-4 h-4 fill-current" />
-                              ) : (
-                                <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                              )}
-                            </button>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                      {CURATED_TRACKS.filter(t => t.genre === 'rai').map((track) => {
+                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        return (
+                          <div
+                            key={track.id}
+                            onClick={() => handlePlayTrack(track)}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
+                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
+                            }`}
+                          >
+                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                              <CoverImage
+                                src={track.thumbnail}
+                                alt={track.title}
+                                youtubeId={track.youtubeId}
+                                loading="eager"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isCurrent && isPlaying) {
+                                    handlePlayPause();
+                                  } else {
+                                    handlePlayTrack(track);
+                                  }
+                                }}
+                                aria-label={`Play ${track.title}`}
+                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                              >
+                                {isCurrent && isPlaying ? (
+                                  <Pause className="w-4 h-4 fill-current" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                )}
+                              </button>
+                            </div>
+                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                              {track.title}
+                            </div>
+                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
+                              {track.artist}
+                            </div>
                           </div>
-                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                            {track.title}
-                          </div>
-                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                            {track.artist}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Section 4: Global Hits */}
-                <div>
-                  <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                    <div className="min-w-0">
-                      <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                        <span>Global Chart Toppers</span>
-                        <span className="text-[11px] font-mono font-normal text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                          Top 50
-                        </span>
-                      </h2>
-                      <p className="text-xs text-neutral-400 mt-0.5">The Weeknd, Dua Lipa, Kendrick Lamar, Daft Punk</p>
+                        );
+                      })}
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedPlaylistId('playlist_global');
-                        setCurrentView('playlist');
-                      }}
-                      className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                    >
-                      Show all
-                    </button>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                    {CURATED_TRACKS.filter(t => t.genre === 'global').map((track) => {
-                      const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                      return (
-                        <div
-                          key={track.id}
-                          onClick={() => handlePlayTrack(track)}
-                          className="group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg transition-all duration-200 cursor-pointer flex flex-col relative"
-                        >
-                          <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                            <img
-                              src={track.thumbnail}
-                              alt={track.title}
-                              className="w-full h-full object-cover"
-                            />
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isCurrent && isPlaying) {
-                                  handlePlayPause();
-                                } else {
-                                  handlePlayTrack(track);
-                                }
-                              }}
-                              aria-label={`Play ${track.title}`}
-                              className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                              }`}
-                            >
-                              {isCurrent && isPlaying ? (
-                                <Pause className="w-4 h-4 fill-current" />
-                              ) : (
-                                <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                              )}
-                            </button>
+                {/* Section 3: Maghreb Rap & Trap */}
+                {(selectedGenre === 'all' || selectedGenre === 'rap') && (
+                  <div>
+                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                      <div className="min-w-0">
+                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
+                          <span>Maghreb Rap & Trap</span>
+                          <span className="text-[11px] font-mono font-normal text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            Trending
+                          </span>
+                        </h2>
+                        <p className="text-xs text-neutral-400 mt-0.5">Heavyweights from ElGrandeToto, Dizzy Dros, Morad & Soolking</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedPlaylistId('playlist_rap');
+                          setCurrentView('playlist');
+                        }}
+                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
+                      >
+                        Show all
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                      {CURATED_TRACKS.filter(t => t.genre === 'rap').map((track) => {
+                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        return (
+                          <div
+                            key={track.id}
+                            onClick={() => handlePlayTrack(track)}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
+                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
+                            }`}
+                          >
+                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                              <CoverImage
+                                src={track.thumbnail}
+                                alt={track.title}
+                                youtubeId={track.youtubeId}
+                                loading="eager"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isCurrent && isPlaying) {
+                                    handlePlayPause();
+                                  } else {
+                                    handlePlayTrack(track);
+                                  }
+                                }}
+                                aria-label={`Play ${track.title}`}
+                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                              >
+                                {isCurrent && isPlaying ? (
+                                  <Pause className="w-4 h-4 fill-current" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                )}
+                              </button>
+                            </div>
+                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                              {track.title}
+                            </div>
+                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
+                              {track.artist}
+                            </div>
                           </div>
-                          <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                            {track.title}
-                          </div>
-                          <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                            {track.artist}
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Section 4: Global Chart Hits */}
+                {(selectedGenre === 'all' || selectedGenre === 'global') && (
+                  <div>
+                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                      <div className="min-w-0">
+                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
+                          <span>Global Chart Hits</span>
+                          <span className="text-[11px] font-mono font-normal text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            Worldwide
+                          </span>
+                        </h2>
+                        <p className="text-xs text-neutral-400 mt-0.5">Worldwide favorites by The Weeknd, Dua Lipa, Kendrick Lamar & Daft Punk</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedPlaylistId('playlist_global');
+                          setCurrentView('playlist');
+                        }}
+                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
+                      >
+                        Show all
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                      {CURATED_TRACKS.filter(t => t.genre === 'global').map((track) => {
+                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        return (
+                          <div
+                            key={track.id}
+                            onClick={() => handlePlayTrack(track)}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
+                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
+                            }`}
+                          >
+                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                              <CoverImage
+                                src={track.thumbnail}
+                                alt={track.title}
+                                youtubeId={track.youtubeId}
+                                loading="eager"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isCurrent && isPlaying) {
+                                    handlePlayPause();
+                                  } else {
+                                    handlePlayTrack(track);
+                                  }
+                                }}
+                                aria-label={`Play ${track.title}`}
+                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                              >
+                                {isCurrent && isPlaying ? (
+                                  <Pause className="w-4 h-4 fill-current" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                )}
+                              </button>
+                            </div>
+                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                              {track.title}
+                            </div>
+                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
+                              {track.artist}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1157,7 +1173,7 @@ export default function App() {
                       setSelectedPlaylistId('liked');
                       setCurrentView('playlist');
                     }}
-                    className="p-5 sm:p-6 rounded-xl bg-gradient-to-br from-indigo-800 to-purple-900 hover:scale-[1.01] transition-transform cursor-pointer shadow-lg flex flex-col justify-between h-40 sm:h-48"
+                    className="card-interactive p-5 sm:p-6 rounded-xl bg-gradient-to-br from-indigo-800 to-purple-900 cursor-pointer shadow-lg flex flex-col justify-between h-40 sm:h-48"
                   >
                     <div>
                       <Heart className="w-7 h-7 sm:w-8 sm:h-8 fill-white text-white mb-2.5 sm:mb-3" />
@@ -1174,11 +1190,13 @@ export default function App() {
                         setSelectedPlaylistId(pl.id);
                         setCurrentView('playlist');
                       }}
-                      className="p-3 sm:p-4 rounded-xl bg-[#181818] hover:bg-[#222222] transition-colors cursor-pointer border border-neutral-800 flex items-center gap-3 sm:gap-4"
+                      className="card-interactive p-3 sm:p-4 rounded-xl bg-[#181818] hover:bg-[#222222] cursor-pointer border border-neutral-800 flex items-center gap-3 sm:gap-4"
                     >
-                      <img
+                      <CoverImage
                         src={pl.coverImage}
                         alt={pl.name}
+                        youtubeId={pl.tracks[0]?.youtubeId}
+                        loading="eager"
                         className="w-16 h-16 sm:w-24 sm:h-24 rounded-lg object-cover shrink-0"
                       />
                       <div className="flex-1 min-w-0">
@@ -1253,18 +1271,6 @@ export default function App() {
         onToggleLike={(track) => handleToggleLike(track)}
       />
 
-      {/* Spotify Premium 5-Band Equalizer & 320k Audio Quality Modal */}
-      <EqualizerModal
-        isOpen={isEqualizerOpen}
-        onClose={() => setIsEqualizerOpen(false)}
-        settings={eqSettings}
-        onUpdateSettings={setEqSettings}
-        audioQuality={audioQuality}
-        onChangeAudioQuality={setAudioQuality}
-        crossfade={crossfade}
-        onChangeCrossfade={setCrossfade}
-      />
-
       {/* Sleep Timer Modal */}
       <SleepTimerModal
         isOpen={isSleepTimerOpen}
@@ -1330,7 +1336,6 @@ export default function App() {
         onToggleLike={(track) => handleToggleLike(track)}
         onToggleQueue={() => setIsQueueOpen(prev => !prev)}
         onToggleVideo={() => setIsVideoVisible(prev => !prev)}
-        onOpenEqualizer={() => setIsEqualizerOpen(true)}
         onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
         onOpenExpandedCover={() => setIsExpandedCoverOpen(true)}
       />

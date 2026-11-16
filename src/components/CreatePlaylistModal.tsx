@@ -45,7 +45,7 @@ export const CreatePlaylistModal: React.FC<CreatePlaylistModalProps> = ({
     const newPlaylist: Playlist = {
       id: `custom_${Date.now()}`,
       name: name.trim(),
-      description: description.trim() || 'Created with SpotiTube Premium',
+      description: description.trim() || 'Personal mix created on SpotiTube',
       coverImage: gradientOptions[selectedGradient].url,
       tracks: [],
       isCustom: true

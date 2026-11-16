@@ -1,6 +1,7 @@
 import React from 'react';
-import { Home, Search, Library, PlusSquare, Heart, Music2, Shield, FileText, Sliders, Scale, Cookie } from 'lucide-react';
+import { Home, Search, Library, PlusSquare, Heart, Music2, Shield, FileText } from 'lucide-react';
 import { Playlist } from '../types/music';
+import { CoverImage } from './CoverImage';
 
 interface SidebarProps {
   currentView: 'home' | 'search' | 'library' | 'playlist';
@@ -10,7 +11,6 @@ interface SidebarProps {
   onNavigate: (view: 'home' | 'search' | 'library') => void;
   onSelectPlaylist: (playlistId: string) => void;
   onOpenLegal: (tab?: 'privacy' | 'terms' | 'dmca' | 'cookies') => void;
-  onOpenEqualizer: () => void;
   onOpenCreatePlaylist: () => void;
 }
 
@@ -22,7 +22,6 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
   onNavigate,
   onSelectPlaylist,
   onOpenLegal,
-  onOpenEqualizer,
   onOpenCreatePlaylist
 }) => {
   return (
@@ -31,17 +30,17 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
       <div className="bg-[#121212] rounded-lg p-5 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5 text-white">
-            <div className="w-8 h-8 rounded-full bg-[#1db954] flex items-center justify-center text-black font-extrabold shadow-[0_0_15px_rgba(29,185,84,0.4)]">
+            <div className="w-8 h-8 rounded-full bg-[#1db954] flex items-center justify-center text-black font-extrabold shadow-[0_0_15px_rgba(29,185,84,0.35)]">
               <Music2 className="w-5 h-5 fill-current" />
             </div>
             <div>
               <span className="font-extrabold text-lg tracking-tight text-white block leading-none">SpotiTube</span>
-              <span className="text-[10px] text-neutral-400 font-mono tracking-wider">MEDIA DISCOVERY</span>
+              <span className="text-[10px] text-neutral-400 font-mono tracking-wider">SOUND DISCOVERY</span>
             </div>
           </div>
           <div className="flex items-center gap-1.5 bg-neutral-900 border border-neutral-800 px-2.5 py-0.5 rounded-full text-[10px] text-[#1db954] font-medium">
             <span className="w-1.5 h-1.5 rounded-full bg-[#1db954] animate-pulse" />
-            <span>WEB PLAYER</span>
+            <span>LIVE</span>
           </div>
         </div>
 
@@ -75,7 +74,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
       {/* Middle Box: Library, Create Playlist & Playlists */}
       <div className="bg-[#121212] rounded-lg p-3 flex-1 flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-3 py-2 text-neutral-400">
-          <button 
+          <button
             onClick={() => onNavigate('library')}
             className="flex items-center gap-3 font-bold text-sm hover:text-white transition-colors cursor-pointer"
           >
@@ -92,7 +91,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           </button>
         </div>
 
-        {/* Quick Actions (Create Playlist & Liked Songs) */}
+        {/* Quick Actions (New Playlist & Liked Songs) */}
         <div className="mt-1 space-y-1">
           <button
             onClick={onOpenCreatePlaylist}
@@ -102,8 +101,8 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
               <PlusSquare className="w-4 h-4" />
             </div>
             <div className="truncate">
-              <div className="text-sm font-semibold truncate group-hover:text-white">Create Playlist</div>
-              <div className="text-[10px] text-neutral-400">Unlimited & Free</div>
+              <div className="text-sm font-semibold truncate group-hover:text-white">New Playlist</div>
+              <div className="text-[10px] text-neutral-400">Build your own mix</div>
             </div>
           </button>
 
@@ -131,7 +130,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
         {/* Playlists scroll area */}
         <div className="flex-1 overflow-y-auto space-y-0.5 pr-1 scrollbar-thin scrollbar-thumb-neutral-700">
           <div className="px-3 py-1 text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
-            Playlists & Mixes
+            Curated & Custom
           </div>
           {playlists.map((playlist) => {
             const isSelected = selectedPlaylistId === playlist.id;
@@ -145,10 +144,11 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
                     : 'hover:bg-neutral-900/60 text-neutral-400 hover:text-neutral-200'
                 }`}
               >
-                <img
+                <CoverImage
                   src={playlist.coverImage}
                   alt={playlist.name}
-                  className="w-8 h-8 rounded object-cover shrink-0"
+                  youtubeId={playlist.tracks[0]?.youtubeId}
+                  className="w-8 h-8 rounded object-cover shrink-0 bg-neutral-800"
                 />
                 <div className="truncate flex-1">
                   <div className="text-sm truncate font-medium group-hover:text-white transition-colors flex items-center gap-1.5">
@@ -166,19 +166,8 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           })}
         </div>
 
-        {/* Audio Quality & Legal Compliance Utilities */}
+        {/* Legal Compliance Utilities */}
         <div className="pt-2 mt-auto border-t border-neutral-800/80 space-y-1">
-          <button
-            onClick={onOpenEqualizer}
-            className="w-full flex items-center justify-between px-3 py-1.5 rounded-md text-xs font-medium text-neutral-300 hover:bg-neutral-900 hover:text-white transition-colors cursor-pointer"
-          >
-            <span className="flex items-center gap-2">
-              <Sliders className="w-3.5 h-3.5 text-[#1db954]" />
-              Equalizer & Audio EQ
-            </span>
-            <span className="text-[10px] text-emerald-400 font-mono">320k</span>
-          </button>
-
           <button
             onClick={() => onOpenLegal('privacy')}
             className="w-full flex items-center justify-between px-3 py-1.5 rounded-md text-xs font-medium text-neutral-300 hover:bg-neutral-900 hover:text-white transition-colors cursor-pointer"
@@ -188,7 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
               Privacy Policy
             </span>
             <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-neutral-800 text-neutral-400">
-              Zero Data
+              Local Only
             </span>
           </button>
 
@@ -198,37 +187,21 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           >
             <span className="flex items-center gap-2">
               <FileText className="w-3.5 h-3.5 text-neutral-400" />
-              Terms of Service
-            </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-neutral-800 text-neutral-400">
-              YouTube API
+              Terms & DMCA
             </span>
           </button>
 
-          {/* Legal Footer Links */}
           <div className="pt-2 px-2 flex flex-wrap gap-x-2.5 gap-y-1 text-[11px] text-neutral-400 border-t border-neutral-800/60">
-            <button
-              onClick={() => onOpenLegal('privacy')}
-              className="hover:text-neutral-300 hover:underline cursor-pointer"
-            >
+            <button onClick={() => onOpenLegal('privacy')} className="hover:text-neutral-300 hover:underline cursor-pointer">
               Privacy
             </button>
-            <button
-              onClick={() => onOpenLegal('terms')}
-              className="hover:text-neutral-300 hover:underline cursor-pointer"
-            >
+            <button onClick={() => onOpenLegal('terms')} className="hover:text-neutral-300 hover:underline cursor-pointer">
               Terms
             </button>
-            <button
-              onClick={() => onOpenLegal('dmca')}
-              className="hover:text-neutral-300 hover:underline cursor-pointer"
-            >
+            <button onClick={() => onOpenLegal('dmca')} className="hover:text-neutral-300 hover:underline cursor-pointer">
               DMCA
             </button>
-            <button
-              onClick={() => onOpenLegal('cookies')}
-              className="hover:text-neutral-300 hover:underline cursor-pointer"
-            >
+            <button onClick={() => onOpenLegal('cookies')} className="hover:text-neutral-300 hover:underline cursor-pointer">
               Cookies
             </button>
           </div>
