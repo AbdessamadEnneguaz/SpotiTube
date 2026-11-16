@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import {
@@ -11,45 +12,93 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const httpServer = http.createServer(app);
 const PORT = Number(process.env.PORT) || 3000;
+
+// Trust first proxy hop (Vercel / Cloud Run) for accurate req.ip without spoofing
+app.set('trust proxy', 1);
 
 // Security: Disable X-Powered-By to prevent technology fingerprinting
 app.disable('x-powered-by');
 
-// Security: Enforce strict HTTP response headers
-app.use((_req: Request, res: Response, next: NextFunction) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+// Security: Slowloris / slow-HTTP protection timeouts
+httpServer.requestTimeout = 15000;
+httpServer.headersTimeout = 10000;
+httpServer.keepAliveTimeout = 5000;
+
+// Security: Reject excessively long URLs / malformed path flooding early
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.url.length > 2048) {
+    return res.status(414).json({ error: 'Request URI too long.' });
+  }
+  if (req.url.includes('\0')) {
+    return res.status(400).json({ error: 'Invalid request.' });
+  }
   next();
 });
 
-// JSON body parser with size limit to prevent payload flooding
-app.use(express.json({ limit: '100kb' }));
+// Security: Enforce hardened HTTP response headers
+app.use((_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader(
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com",
+      "worker-src 'self'",
+      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+      "font-src 'self' https://fonts.gstatic.com data:",
+      "img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://images.unsplash.com",
+      "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+      "connect-src 'self' ws: wss: https://pipedapi.kavin.rocks https://pipedapi.adminforge.de https://api.piped.private.coffee https://i.ytimg.com https://images.unsplash.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'"
+    ].join('; ')
+  );
+  next();
+});
+
+// JSON body parser with strict size limit to prevent payload flooding
+app.use(express.json({ limit: '64kb' }));
+
+// Restrict API routes strictly to GET/HEAD
+app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return res.status(405).json({ error: 'Method not allowed.' });
+  }
+  next();
+});
 
 // Live YouTube Search API endpoint (Keyless multi-layer extraction, compliant playback via IFrame API)
 app.get('/api/search', async (req: Request, res: Response) => {
-  const clientIp =
-    (req.headers['x-forwarded-for'] as string)?.split(',')[0].trim() || req.ip || 'unknown';
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
   if (isSearchRateLimited(clientIp)) {
+    res.setHeader('Retry-After', '60');
     return res.status(429).json({
       error: 'Too many search requests. Please wait a moment and try again.'
     });
   }
 
-  const query = sanitizeSearchQuery((req.query.q as string) || '');
+  const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
+  const query = sanitizeSearchQuery(rawQuery);
   if (!query) {
     return res.json([]);
   }
 
   try {
     const results = await searchYouTubeTracks(query);
-    console.log(`[Search] Query: "${query}" -> Found ${results.length} tracks`);
+    if (results.length > 0) {
+      res.setHeader('Cache-Control', 'public, max-age=120');
+    }
     return res.json(results);
-  } catch (err: any) {
-    console.error('Search error in /api/search:', err?.message || err);
+  } catch {
     return res.status(500).json([]);
   }
 });
@@ -74,13 +123,16 @@ async function startServer() {
   } else {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        ws: { server: httpServer },
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  httpServer.listen(PORT, '0.0.0.0', () => {
     console.log(`SpotiTube full-stack server running on http://0.0.0.0:${PORT}`);
   });
 }

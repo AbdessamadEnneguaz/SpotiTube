@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Search, X, Moon, Music2, Shield, History, ArrowUpRight } from 'lucide-react';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   currentView: string;
@@ -84,6 +85,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           )}
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <PWAInstallButton />
             <button
               type="button"
               onClick={onOpenSleepTimer}
@@ -234,6 +236,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 
         {/* Desktop Right Action buttons */}
         <div className="hidden sm:flex items-center gap-2 shrink-0">
+          <PWAInstallButton />
           <button
             type="button"
             onClick={onOpenSleepTimer}

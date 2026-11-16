@@ -28,6 +28,7 @@ import { SleepTimerModal } from './components/SleepTimerModal';
 import { CreatePlaylistModal } from './components/CreatePlaylistModal';
 import { YouTubePlayerEmbed } from './components/YouTubePlayerEmbed';
 import { CoverImage } from './components/CoverImage';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { CURATED_TRACKS, PLAYLISTS } from './data/curatedTracks';
 import { Track, Playlist, RepeatMode } from './types/music';
 import { searchYouTube } from './services/youtubeApi';
@@ -46,7 +47,17 @@ import {
   loadRecentSearches,
   saveRecentSearches
 } from './utils/recentSearches';
+import {
+  CachedTrackEntry,
+  loadCachedTrackEntries,
+  saveCachedTrackEntries,
+  recordTrackPlay,
+  getFrequentTracks,
+  syncTrackToServiceWorkerCache,
+  warmCuratedCoversCache
+} from './utils/trackCache';
 import { formatDuration } from './utils/formatters';
+import { safeParseJson, sanitizeMediaUrl, sanitizeClientText } from './utils/security';
 
 export default function App() {
   // Navigation & View State
@@ -60,6 +71,27 @@ export default function App() {
 
   // Recent Searches State (persisted in localStorage)
   const [recentSearches, setRecentSearches] = useState<string[]>(() => loadRecentSearches());
+
+  // Frequently Played Track Metadata Cache (persisted in localStorage & SW Cache Storage)
+  const [cachedTrackEntries, setCachedTrackEntries] = useState<CachedTrackEntry[]>(() =>
+    loadCachedTrackEntries()
+  );
+
+  useEffect(() => {
+    saveCachedTrackEntries(cachedTrackEntries);
+  }, [cachedTrackEntries]);
+
+  useEffect(() => {
+    // Pre-warm initial cover artwork thumbnails into Cache Storage on idle
+    const timer = setTimeout(() => {
+      void warmCuratedCoversCache(CURATED_TRACKS);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const frequentTracks = useMemo(() => {
+    return getFrequentTracks(cachedTrackEntries, 5);
+  }, [cachedTrackEntries]);
 
   // Save recent searches to localStorage
   useEffect(() => {
@@ -103,7 +135,19 @@ export default function App() {
   const [customPlaylists, setCustomPlaylists] = useState<Playlist[]>(() => {
     try {
       const saved = localStorage.getItem('spotitube_custom_playlists');
-      return saved ? JSON.parse(saved) : [];
+      const parsed = safeParseJson<Playlist[]>(saved, [], (val): val is Playlist[] => Array.isArray(val));
+      return parsed
+        .filter((pl) => pl && typeof pl.id === 'string' && typeof pl.name === 'string')
+        .map((pl) => ({
+          ...pl,
+          name: sanitizeClientText(pl.name, 80) || 'Custom Playlist',
+          description: sanitizeClientText(pl.description || '', 200),
+          coverImage: sanitizeMediaUrl(
+            pl.coverImage,
+            'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500&auto=format&fit=crop&q=80'
+          ),
+          tracks: Array.isArray(pl.tracks) ? pl.tracks : []
+        }));
     } catch {
       return [];
     }
@@ -144,7 +188,12 @@ export default function App() {
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('spotitube_liked_ids');
-      return saved ? new Set(JSON.parse(saved)) : new Set(['chaabi_1', 'rai_1', 'rap_1']);
+      const parsed = safeParseJson<string[]>(
+        saved,
+        ['chaabi_1', 'rai_1', 'rap_1'],
+        (val): val is string[] => Array.isArray(val) && val.every((x) => typeof x === 'string')
+      );
+      return new Set(parsed.slice(0, 500));
     } catch {
       return new Set(['chaabi_1', 'rai_1', 'rap_1']);
     }
@@ -290,6 +339,10 @@ export default function App() {
     setIsPlaying(true);
     setCurrentTime(0);
     setDuration(track.durationSeconds || 210);
+
+    // Cache track metadata & thumbnail for Cache-First offline/intermittent resilience
+    setCachedTrackEntries(prev => recordTrackPlay(prev, track));
+    void syncTrackToServiceWorkerCache(track);
   }, [currentView, searchResults, displayedTracks, queue]);
 
   const handlePlayPause = useCallback(() => {
@@ -843,6 +896,74 @@ export default function App() {
                   </div>
                 </div>
 
+                {/* Cached Frequently Played Section */}
+                {frequentTracks.length > 0 && selectedGenre === 'all' && (
+                  <div>
+                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
+                      <div className="min-w-0">
+                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
+                          <span>Frequently Played</span>
+                          <span className="text-[11px] font-mono font-normal text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            Cached Offline
+                          </span>
+                        </h2>
+                        <p className="text-xs text-neutral-400 mt-0.5">Metadata &amp; artwork saved locally for instant loading</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                      {frequentTracks.map((track) => {
+                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        return (
+                          <div
+                            key={`freq-${track.youtubeId}`}
+                            onClick={() => handlePlayTrack(track, frequentTracks)}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
+                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
+                            }`}
+                          >
+                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
+                              <CoverImage
+                                src={track.thumbnail}
+                                alt={track.title}
+                                youtubeId={track.youtubeId}
+                                loading="eager"
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isCurrent && isPlaying) {
+                                    handlePlayPause();
+                                  } else {
+                                    handlePlayTrack(track, frequentTracks);
+                                  }
+                                }}
+                                aria-label={`Play ${track.title}`}
+                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                              >
+                                {isCurrent && isPlaying ? (
+                                  <Pause className="w-4 h-4 fill-current" />
+                                ) : (
+                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                )}
+                              </button>
+                            </div>
+                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
+                              {track.title}
+                            </div>
+                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
+                              {track.artist}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Section 1: Moroccan Chaabi Classics */}
                 {(selectedGenre === 'all' || selectedGenre === 'chaabi') && (
                   <div>
@@ -1349,6 +1470,9 @@ export default function App() {
         }}
         onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
       />
+
+      {/* Offline Connectivity Banner */}
+      <OfflineIndicator cachedTrackCount={cachedTrackEntries.length} />
 
       {/* Legal & Compliance Modal (Privacy Policy, Terms of Service, DMCA, Cookies) */}
       <LegalModal

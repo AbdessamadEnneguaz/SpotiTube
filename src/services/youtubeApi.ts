@@ -1,6 +1,8 @@
 import { Track } from '../types/music';
 import { parseYouTubeTitle, filterTracks } from '../utils/formatters';
 import { CURATED_TRACKS } from '../data/curatedTracks';
+import { loadCachedTrackEntries, searchCachedTracks } from '../utils/trackCache';
+import { isValidYouTubeId, sanitizeMediaUrl, sanitizeClientText } from '../utils/security';
 
 let isScriptLoading = false;
 let isScriptLoaded = false;
@@ -64,19 +66,23 @@ export function loadYouTubeIFrameAPI(): Promise<void> {
 
 function mapRawSearchItems(items: any[]): Track[] {
   return items
-    .filter((item: any) => item && (item.id || item.youtubeId))
+    .filter((item: any) => item && isValidYouTubeId(item.youtubeId || item.id))
     .map((item: any) => {
       const videoId = String(item.youtubeId || item.id);
-      const { title, artist } = parseYouTubeTitle(item.title || '', item.channel || item.artist);
+      const { title, artist } = parseYouTubeTitle(
+        sanitizeClientText(item.title || '', 160),
+        sanitizeClientText(item.channel || item.artist || '', 100)
+      );
+      const defaultThumb = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
       return {
         id: `yt_${videoId}`,
         youtubeId: videoId,
         title,
         artist,
         album: 'YouTube Music',
-        thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
-        durationSeconds: item.durationSeconds || 210,
-        durationFormatted: item.durationFormatted || '3:30',
+        thumbnail: sanitizeMediaUrl(item.thumbnail, defaultThumb),
+        durationSeconds: typeof item.durationSeconds === 'number' && item.durationSeconds > 0 ? item.durationSeconds : 210,
+        durationFormatted: sanitizeClientText(item.durationFormatted || '3:30', 16) || '3:30',
         genre: detectGenre(title, artist),
         views: 'Popular'
       };
@@ -106,14 +112,18 @@ async function searchClientMirrors(query: string): Promise<Track[]> {
 
       for (const item of items) {
         const urlStr = String(item.url || '');
-        const match = urlStr.match(/[?&]v=([^&]+)/) || urlStr.match(/\/watch\/([^?&#/]+)/);
+        const match = urlStr.match(/[?&]v=([0-9A-Za-z_-]{11})/) || urlStr.match(/\/watch\/([0-9A-Za-z_-]{11})/);
         const videoId = match ? match[1] : '';
-        if (!videoId) continue;
+        if (!isValidYouTubeId(videoId)) continue;
 
         const dur = typeof item.duration === 'number' && item.duration > 0 ? item.duration : 210;
         const mins = Math.floor(dur / 60);
         const secs = String(Math.floor(dur % 60)).padStart(2, '0');
-        const { title, artist } = parseYouTubeTitle(item.title || '', item.uploaderName);
+        const { title, artist } = parseYouTubeTitle(
+          sanitizeClientText(item.title || '', 160),
+          sanitizeClientText(item.uploaderName || '', 100)
+        );
+        const defaultThumb = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
 
         mapped.push({
           id: `yt_${videoId}`,
@@ -121,7 +131,7 @@ async function searchClientMirrors(query: string): Promise<Track[]> {
           title,
           artist,
           album: 'YouTube Music',
-          thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`,
+          thumbnail: sanitizeMediaUrl(item.thumbnail, defaultThumb),
           durationSeconds: dur,
           durationFormatted: `${mins}:${secs}`,
           genre: detectGenre(title, artist),
@@ -140,8 +150,8 @@ async function searchClientMirrors(query: string): Promise<Track[]> {
 }
 
 /**
- * Keyless YouTube Search (Connects to /api/search on Express or Vercel Serverless,
- * with browser-side CORS mirror and curated fallbacks).
+ * Keyless YouTube Search (Served Cache-First by Service Worker for repeated queries,
+ * falling back to cached frequently played metadata + curated catalog during offline/intermittent connectivity).
  */
 export async function searchYouTube(
   query: string
@@ -151,41 +161,72 @@ export async function searchYouTube(
     return { tracks: CURATED_TRACKS, source: 'curated' };
   }
 
-  // 1. Try /api/search (works on both local Express server.ts and Vercel Python /api/search.py)
-  try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, {
-      headers: { Accept: 'application/json' }
-    });
-    const contentType = res.headers.get('content-type') || '';
-    if (res.ok && contentType.includes('application/json')) {
-      const data = await res.json();
-      const items = Array.isArray(data) ? data : (data.tracks || []);
-      if (items.length > 0) {
-        return { tracks: mapRawSearchItems(items), source: 'local_backend' };
+  const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+  const searchApiUrl = `/api/search?q=${encodeURIComponent(trimmed)}`;
+
+  // 1. Try /api/search (CacheFirst via Service Worker; when offline check Cache Storage directly first)
+  if (!isOnline && typeof window !== 'undefined' && 'caches' in window) {
+    try {
+      const cachedRes = await window.caches.match(searchApiUrl);
+      if (cachedRes && cachedRes.ok) {
+        const data = await cachedRes.json();
+        const items = Array.isArray(data) ? data : (data.tracks || []);
+        if (items.length > 0) {
+          return { tracks: mapRawSearchItems(items), source: 'local_backend' };
+        }
       }
+    } catch {
+      // fall through to cached played tracks + curated catalog
     }
-  } catch (err) {
-    console.warn('Backend search request failed, trying browser fallback:', err);
+  } else {
+    try {
+      const res = await fetch(searchApiUrl, {
+        headers: { Accept: 'application/json' }
+      });
+      const contentType = res.headers.get('content-type') || '';
+      if (res.ok && contentType.includes('application/json')) {
+        const data = await res.json();
+        const items = Array.isArray(data) ? data : (data.tracks || []);
+        if (items.length > 0) {
+          return { tracks: mapRawSearchItems(items), source: 'local_backend' };
+        }
+      }
+    } catch (err) {
+      console.warn('Backend search request failed, using cached/local fallback:', err);
+    }
   }
 
-  // 2. Client-side mirror fallback (helps if hosted statically or server IP blocked)
-  try {
-    const mirrorTracks = await searchClientMirrors(trimmed);
-    if (mirrorTracks.length > 0) {
-      return { tracks: mirrorTracks, source: 'local_backend' };
+  // 2. Client-side mirror fallback (only when browser reports online)
+  if (isOnline) {
+    try {
+      const mirrorTracks = await searchClientMirrors(trimmed);
+      if (mirrorTracks.length > 0) {
+        return { tracks: mirrorTracks, source: 'local_backend' };
+      }
+    } catch {
+      // ignore and fall back to cached + curated metadata
     }
-  } catch {
-    // ignore and fall back to curated catalog
   }
 
-  // 3. Curated library search (covers Chaabi, Rai, Rap, Pop)
+  // 3. Offline / intermittent fallback: Cached frequently played track metadata + curated catalog
+  const cachedPlayedMatches = searchCachedTracks(loadCachedTrackEntries(), trimmed);
   const curatedResults = searchCuratedLibrary(trimmed);
+  const merged: Track[] = [];
+  const seenIds = new Set<string>();
+
+  for (const track of [...cachedPlayedMatches, ...curatedResults]) {
+    if (!seenIds.has(track.youtubeId)) {
+      seenIds.add(track.youtubeId);
+      merged.push(track);
+    }
+  }
+
   return {
-    tracks: curatedResults,
+    tracks: merged,
     source: 'curated',
     message:
-      curatedResults.length > 0
-        ? `Found ${curatedResults.length} matching tracks`
+      merged.length > 0
+        ? `${isOnline ? 'Catalog' : 'Offline cached'} matches (${merged.length} tracks)`
         : 'No matching tracks found — try another search query'
   };
 }

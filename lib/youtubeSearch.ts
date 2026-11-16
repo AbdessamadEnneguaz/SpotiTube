@@ -9,6 +9,19 @@ export interface SearchResultItem {
   durationFormatted: string;
 }
 
+const YOUTUBE_ID_RE = /^[0-9A-Za-z_-]{11}$/;
+
+function isValidVideoId(id: string): boolean {
+  return YOUTUBE_ID_RE.test(id);
+}
+
+function safeHttpsThumbnail(url: unknown, videoId: string): string {
+  if (typeof url === 'string' && url.startsWith('https://')) {
+    return url;
+  }
+  return `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
+}
+
 // Helper to convert MM:SS or HH:MM:SS to seconds
 export function parseLengthToSeconds(lengthStr: string): number {
   if (!lengthStr) return 210;
@@ -34,39 +47,91 @@ export function formatSeconds(totalSeconds: number): string {
 }
 
 export function sanitizeSearchQuery(raw: string): string {
-  let query = (raw || '').trim();
+  let query = (raw || '').replace(/[\u0000-\u001F\u007F]/g, '').trim();
   if (!query) return '';
-  if (query.length > 120) {
-    query = query.slice(0, 120);
+  if (query.length > 100) {
+    query = query.slice(0, 100);
   }
-  return query.replace(/[<>{}\\]/g, '').trim();
+  return query.replace(/[<>{}\\"'`]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-// Simple In-Memory Rate Limiter
+// Bounded In-Memory Rate Limiter + Global Burst Protection (OOM / DDoS safe)
 interface RateLimitRecord {
   count: number;
   resetAt: number;
+  blockedUntil?: number;
 }
 const searchRateLimits = new Map<string, RateLimitRecord>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const MAX_SEARCH_REQUESTS = 60;
+const MAX_SEARCH_REQUESTS_PER_IP = 40;
+const COOLDOWN_MS = 60 * 1000;
+const MAX_TRACKED_IPS = 4000;
+
+let globalWindowResetAt = Date.now() + RATE_LIMIT_WINDOW_MS;
+let globalRequestCount = 0;
+const MAX_GLOBAL_SEARCH_REQUESTS_PER_MIN = 300;
+
+function pruneExpiredRateLimits(now: number): void {
+  for (const [ip, rec] of searchRateLimits.entries()) {
+    if (now > rec.resetAt && (!rec.blockedUntil || now > rec.blockedUntil)) {
+      searchRateLimits.delete(ip);
+    }
+  }
+  // If still above cap under spoofed-IP flood, evict oldest entries
+  while (searchRateLimits.size >= MAX_TRACKED_IPS) {
+    const oldestKey = searchRateLimits.keys().next().value;
+    if (oldestKey === undefined) break;
+    searchRateLimits.delete(oldestKey);
+  }
+}
 
 export function isSearchRateLimited(clientIp: string): boolean {
   const now = Date.now();
-  const record = searchRateLimits.get(clientIp);
+
+  // Global burst guard against distributed / spoofed-IP floods
+  if (now > globalWindowResetAt) {
+    globalWindowResetAt = now + RATE_LIMIT_WINDOW_MS;
+    globalRequestCount = 1;
+  } else {
+    globalRequestCount += 1;
+    if (globalRequestCount > MAX_GLOBAL_SEARCH_REQUESTS_PER_MIN) {
+      return true;
+    }
+  }
+
+  const normalizedIp = (clientIp || 'unknown').slice(0, 64);
+  const record = searchRateLimits.get(normalizedIp);
+
+  if (record?.blockedUntil && now < record.blockedUntil) {
+    return true;
+  }
 
   if (!record || now > record.resetAt) {
-    searchRateLimits.set(clientIp, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    if (searchRateLimits.size >= MAX_TRACKED_IPS) {
+      pruneExpiredRateLimits(now);
+    }
+    searchRateLimits.set(normalizedIp, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return false;
   }
 
-  if (record.count >= MAX_SEARCH_REQUESTS) {
+  if (record.count >= MAX_SEARCH_REQUESTS_PER_IP) {
+    record.blockedUntil = now + COOLDOWN_MS;
     return true;
   }
 
   record.count += 1;
   return false;
 }
+
+// In-Memory Search Result Cache + In-Flight Deduplication (stops Cache Stampede / DoS)
+interface CachedSearchResult {
+  items: SearchResultItem[];
+  expiresAt: number;
+}
+const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000;
+const MAX_CACHED_QUERIES = 200;
+const searchResultCache = new Map<string, CachedSearchResult>();
+const inFlightSearches = new Map<string, Promise<SearchResultItem[]>>();
 
 // Extract video items from YouTube twoColumnSearchResultsRenderer JSON structure
 function extractVideosFromYouTubeJson(data: any): SearchResultItem[] {
@@ -81,7 +146,7 @@ function extractVideosFromYouTubeJson(data: any): SearchResultItem[] {
       if (item.videoRenderer?.videoId) {
         const v = item.videoRenderer;
         const id = String(v.videoId);
-        if (!id || seenIds.has(id)) continue;
+        if (!isValidVideoId(id) || seenIds.has(id)) continue;
         seenIds.add(id);
 
         const title =
@@ -93,19 +158,15 @@ function extractVideosFromYouTubeJson(data: any): SearchResultItem[] {
           v.longBylineText?.runs?.map((r: any) => r.text).join('') ||
           'YouTube Artist';
         const length = v.lengthText?.simpleText || '';
-
-        // Skip livestreams with no duration if better results exist, or default to 3:30
-        const thumb =
-          v.thumbnail?.thumbnails?.[v.thumbnail.thumbnails.length - 1]?.url ||
-          `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+        const rawThumb = v.thumbnail?.thumbnails?.[v.thumbnail.thumbnails.length - 1]?.url;
 
         results.push({
           id,
           youtubeId: id,
-          title,
-          channel,
-          artist: channel,
-          thumbnail: thumb,
+          title: String(title).slice(0, 200),
+          channel: String(channel).slice(0, 120),
+          artist: String(channel).slice(0, 120),
+          thumbnail: safeHttpsThumbnail(rawThumb, id),
           durationSeconds: parseLengthToSeconds(length || '3:30'),
           durationFormatted: length || '3:30'
         });
@@ -119,7 +180,7 @@ function extractVideosFromYouTubeJson(data: any): SearchResultItem[] {
   return results;
 }
 
-// Layer 1: YouTube InnerTube JSON API (Keyless, works reliably without HTML scraping)
+// Layer 1: YouTube InnerTube JSON API (Keyless)
 async function searchViaInnerTube(query: string): Promise<SearchResultItem[]> {
   const res = await fetch('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', {
     method: 'POST',
@@ -151,7 +212,7 @@ async function searchViaInnerTube(query: string): Promise<SearchResultItem[]> {
   return extractVideosFromYouTubeJson(data);
 }
 
-// Layer 3: YouTube Web HTML fallback with Consent cookies
+// Layer 2: YouTube Web HTML fallback with Consent cookies
 async function searchViaYouTubeHtml(query: string): Promise<SearchResultItem[]> {
   const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
   const response = await fetch(searchUrl, {
@@ -175,7 +236,7 @@ async function searchViaYouTubeHtml(query: string): Promise<SearchResultItem[]> 
   return extractVideosFromYouTubeJson(data);
 }
 
-// Layer 4: Public Piped / Invidious API fallback (protects against datacenter IP blocks on Vercel)
+// Layer 3: Public Piped API fallback
 async function searchViaPublicMirrors(query: string): Promise<SearchResultItem[]> {
   const pipedMirrors = [
     'https://pipedapi.kavin.rocks',
@@ -201,16 +262,16 @@ async function searchViaPublicMirrors(query: string): Promise<SearchResultItem[]
         const urlStr = String(item.url || '');
         const match = urlStr.match(/[?&]v=([^&]+)/) || urlStr.match(/\/watch\/([^?&#/]+)/);
         const id = match ? match[1] : '';
-        if (!id) continue;
+        if (!isValidVideoId(id)) continue;
 
         const dur = typeof item.duration === 'number' && item.duration > 0 ? item.duration : 210;
         results.push({
           id,
           youtubeId: id,
-          title: item.title || 'Unknown Title',
-          channel: item.uploaderName || 'YouTube Artist',
-          artist: item.uploaderName || 'YouTube Artist',
-          thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+          title: String(item.title || 'Unknown Title').slice(0, 200),
+          channel: String(item.uploaderName || 'YouTube Artist').slice(0, 120),
+          artist: String(item.uploaderName || 'YouTube Artist').slice(0, 120),
+          thumbnail: safeHttpsThumbnail(item.thumbnail, id),
           durationSeconds: dur,
           durationFormatted: formatSeconds(dur)
         });
@@ -227,11 +288,7 @@ async function searchViaPublicMirrors(query: string): Promise<SearchResultItem[]
   return [];
 }
 
-export async function searchYouTubeTracks(query: string): Promise<SearchResultItem[]> {
-  const cleanQuery = sanitizeSearchQuery(query);
-  if (!cleanQuery) return [];
-
-  // Layer 1: YouTube InnerTube JSON API (Keyless)
+async function runSearchPipeline(cleanQuery: string): Promise<SearchResultItem[]> {
   try {
     const innerTubeResults = await searchViaInnerTube(cleanQuery);
     if (innerTubeResults.length > 0) return innerTubeResults;
@@ -239,7 +296,6 @@ export async function searchYouTubeTracks(query: string): Promise<SearchResultIt
     console.warn('[Search] InnerTube notice:', (err as Error)?.message);
   }
 
-  // Layer 2: YouTube Web HTML scraping with Consent cookies
   try {
     const htmlResults = await searchViaYouTubeHtml(cleanQuery);
     if (htmlResults.length > 0) return htmlResults;
@@ -247,7 +303,6 @@ export async function searchYouTubeTracks(query: string): Promise<SearchResultIt
     console.warn('[Search] HTML search notice:', (err as Error)?.message);
   }
 
-  // Layer 3: Public Piped mirrors (for datacenter fallback)
   try {
     const mirrorResults = await searchViaPublicMirrors(cleanQuery);
     if (mirrorResults.length > 0) return mirrorResults;
@@ -256,4 +311,40 @@ export async function searchYouTubeTracks(query: string): Promise<SearchResultIt
   }
 
   return [];
+}
+
+export async function searchYouTubeTracks(query: string): Promise<SearchResultItem[]> {
+  const cleanQuery = sanitizeSearchQuery(query);
+  if (!cleanQuery) return [];
+
+  const cacheKey = cleanQuery.toLowerCase();
+  const now = Date.now();
+  const cached = searchResultCache.get(cacheKey);
+  if (cached && now < cached.expiresAt) {
+    return cached.items;
+  }
+
+  // Deduplicate concurrent identical queries (DoS / stampede protection)
+  const existingPromise = inFlightSearches.get(cacheKey);
+  if (existingPromise) {
+    return existingPromise;
+  }
+
+  const promise = runSearchPipeline(cleanQuery)
+    .then((items) => {
+      if (items.length > 0) {
+        if (searchResultCache.size >= MAX_CACHED_QUERIES) {
+          const oldestKey = searchResultCache.keys().next().value;
+          if (oldestKey !== undefined) searchResultCache.delete(oldestKey);
+        }
+        searchResultCache.set(cacheKey, { items, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+      }
+      return items;
+    })
+    .finally(() => {
+      inFlightSearches.delete(cacheKey);
+    });
+
+  inFlightSearches.set(cacheKey, promise);
+  return promise;
 }
