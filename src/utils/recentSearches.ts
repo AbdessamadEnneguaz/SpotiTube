@@ -3,7 +3,7 @@
  */
 
 export const RECENT_SEARCHES_STORAGE_KEY = 'spotitube_recent_searches';
-export const DEFAULT_RECENT_SEARCHES = ['7elmetado2', 'ElGrandeToto', 'Said Senhaji', 'Cheb Khaled'];
+export const DEFAULT_RECENT_SEARCHES: string[] = [];
 
 /**
  * Adds a new search term to the recent list.
@@ -14,7 +14,7 @@ export const DEFAULT_RECENT_SEARCHES = ['7elmetado2', 'ElGrandeToto', 'Said Senh
  * - Enforces maximum limit (default: 10)
  */
 export function addSearchTerm(recent: string[], term: string, maxItems: number = 10): string[] {
-  const trimmed = term.trim();
+  const trimmed = term.trim().slice(0, 100);
   if (!trimmed) return recent;
 
   const filtered = recent.filter(t => t.toLowerCase() !== trimmed.toLowerCase());
@@ -37,25 +37,28 @@ export function clearSearchTerms(): string[] {
 }
 
 /**
- * Loads recent searches from localStorage with fallback defaults.
+ * Loads recent searches from localStorage with empty defaults for new installs.
  */
 export function loadRecentSearches(
   storageKey: string = RECENT_SEARCHES_STORAGE_KEY,
   defaultItems: string[] = DEFAULT_RECENT_SEARCHES
 ): string[] {
   if (typeof window === 'undefined' || !window.localStorage) {
-    return defaultItems;
+    return [...defaultItems];
   }
   try {
     const raw = localStorage.getItem(storageKey);
-    if (!raw) return defaultItems;
+    if (!raw) return [...defaultItems];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed) && parsed.every(item => typeof item === 'string')) {
-      return parsed;
+      return parsed
+        .map(item => item.trim().slice(0, 100))
+        .filter(Boolean)
+        .slice(0, 10);
     }
-    return defaultItems;
+    return [...defaultItems];
   } catch {
-    return defaultItems;
+    return [...defaultItems];
   }
 }
 

@@ -7,6 +7,12 @@ import {
   sanitizeSearchQuery,
   searchYouTubeTracks
 } from './lib/youtubeSearch.js';
+import {
+  isValidAudioVideoId,
+  resolveAudioStream,
+  clampByteRange,
+  invalidateAudioStreamCache
+} from './lib/youtubeAudio.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +62,7 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
       "font-src 'self' https://fonts.gstatic.com data:",
       "img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://images.unsplash.com",
       "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+      "media-src 'self' data: blob:",
       "connect-src 'self' ws: wss: https://pipedapi.kavin.rocks https://pipedapi.adminforge.de https://api.piped.private.coffee https://i.ytimg.com https://images.unsplash.com",
       "object-src 'none'",
       "base-uri 'self'",
@@ -100,6 +107,68 @@ app.get('/api/search', async (req: Request, res: Response) => {
     return res.json(results);
   } catch {
     return res.status(500).json([]);
+  }
+});
+
+// Background Audio Stream API (probe & bounded HTTP 206 Range chunks for mobile background playback)
+app.get('/api/audio', async (req: Request, res: Response) => {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (isSearchRateLimited(clientIp)) {
+    res.setHeader('Retry-After', '60');
+    return res.status(429).json({ error: 'Too many requests.' });
+  }
+
+  const videoId = typeof req.query.v === 'string' ? req.query.v : '';
+  const isProbe = req.query.probe === '1';
+
+  if (!isValidAudioVideoId(videoId)) {
+    return res.status(400).json({ error: 'Invalid video ID.' });
+  }
+
+  const stream = await resolveAudioStream(videoId);
+  if (isProbe) {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.json({
+      available: Boolean(stream),
+      mimeType: stream?.mimeType || null
+    });
+  }
+
+  if (!stream) {
+    return res.status(404).json({ error: 'Audio stream unavailable.' });
+  }
+
+  const rangeHdr = typeof req.headers.range === 'string' ? req.headers.range : undefined;
+  const { start, end } = clampByteRange(rangeHdr, stream.contentLength);
+
+  try {
+    const upstream = await fetch(stream.url, {
+      headers: { Range: `bytes=${start}-${end}` },
+      signal: AbortSignal.timeout(7000)
+    });
+
+    if (!upstream.ok && upstream.status !== 206) {
+      invalidateAudioStreamCache(videoId);
+      return res.status(502).json({ error: 'Audio upstream failed.' });
+    }
+
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    const contentRange =
+      upstream.headers.get('content-range') ||
+      (stream.contentLength
+        ? `bytes ${start}-${start + buf.length - 1}/${stream.contentLength}`
+        : `bytes ${start}-${start + buf.length - 1}/*`);
+
+    res.status(206);
+    res.setHeader('Content-Type', stream.mimeType);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Content-Range', contentRange);
+    res.setHeader('Content-Length', String(buf.length));
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(buf);
+  } catch {
+    invalidateAudioStreamCache(videoId);
+    return res.status(502).json({ error: 'Audio stream error.' });
   }
 });
 

@@ -1,10 +1,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import {
+  DEFAULT_RECENT_SEARCHES,
+  loadRecentSearches,
   addSearchTerm,
   removeSearchTerm,
   clearSearchTerms
 } from './recentSearches.ts';
+
+test('new installs start with empty personal search history', () => {
+  assert.deepStrictEqual(DEFAULT_RECENT_SEARCHES, []);
+  assert.deepStrictEqual(loadRecentSearches(), []);
+});
 
 test('addSearchTerm prepends new query and trims whitespace', () => {
   const initial = ['toto', 'senhaji'];

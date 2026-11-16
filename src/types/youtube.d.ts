@@ -55,5 +55,6 @@ export interface YTPlayerInstance {
   getDuration: () => number;
   getCurrentTime: () => number;
   getPlayerState: () => number;
+  getIframe?: () => HTMLIFrameElement;
   destroy: () => void;
 }

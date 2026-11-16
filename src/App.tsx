@@ -58,6 +58,7 @@ import {
 } from './utils/trackCache';
 import { formatDuration } from './utils/formatters';
 import { safeParseJson, sanitizeMediaUrl, sanitizeClientText } from './utils/security';
+import { unlockAudioKeepAlive } from './utils/backgroundAudio';
 
 export default function App() {
   // Navigation & View State
@@ -323,6 +324,7 @@ export default function App() {
 
   // Track playback handlers
   const handlePlayTrack = useCallback((track: Track, contextList?: Track[]) => {
+    unlockAudioKeepAlive();
     const activeList = contextList || (currentView === 'search' ? searchResults : displayedTracks);
     const foundIndex = activeList.findIndex(t => t.id === track.id || t.youtubeId === track.youtubeId);
 
@@ -346,6 +348,7 @@ export default function App() {
   }, [currentView, searchResults, displayedTracks, queue]);
 
   const handlePlayPause = useCallback(() => {
+    unlockAudioKeepAlive();
     if (!currentTrack) {
       if (queue.length > 0) {
         handlePlayTrack(queue[0]);
@@ -1407,7 +1410,7 @@ export default function App() {
         onCreatePlaylist={handleCreatePlaylist}
       />
 
-      {/* Official Compliant YouTube IFrame Player */}
+      {/* Hybrid Background Audio + YouTube IFrame Player */}
       <YouTubePlayerEmbed
         currentTrack={currentTrack}
         isPlaying={isPlaying}
@@ -1418,6 +1421,10 @@ export default function App() {
         onTimeUpdate={handleTimeUpdate}
         onPlayerStateChange={handlePlayerStateChange}
         onTrackError={handleTrackError}
+        onPlayPause={handlePlayPause}
+        onNext={handleNext}
+        onPrevious={handlePrevious}
+        onSeek={handleSeek}
         isVisible={isVideoVisible}
         onCloseVideo={() => setIsVideoVisible(false)}
       />
