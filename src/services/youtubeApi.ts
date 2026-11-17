@@ -91,9 +91,9 @@ function mapRawSearchItems(items: any[]): Track[] {
 
 async function searchClientMirrors(query: string): Promise<Track[]> {
   const mirrors = [
+    'https://api.piped.private.coffee',
     'https://pipedapi.kavin.rocks',
-    'https://pipedapi.adminforge.de',
-    'https://api.piped.private.coffee'
+    'https://pipedapi.adminforge.de'
   ];
 
   for (const base of mirrors) {

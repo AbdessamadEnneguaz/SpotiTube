@@ -212,6 +212,7 @@ app.get('/SpotiTube.apk', (_req: Request, res: Response) => {
   }
   res.setHeader('Content-Type', 'application/vnd.android.package-archive');
   res.setHeader('Content-Disposition', 'attachment; filename="SpotiTube.apk"');
+  res.setHeader('Cache-Control', 'no-store, must-revalidate');
   return res.sendFile(found);
 });
 

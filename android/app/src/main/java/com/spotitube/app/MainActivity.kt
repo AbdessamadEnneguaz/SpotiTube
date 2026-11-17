@@ -20,10 +20,13 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.webkit.WebViewAssetLoader
+import java.net.HttpURLConnection
+import java.net.URL
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: BackgroundWebView
+    @Volatile
     private var loadedBundledFallback = false
 
     companion object {
@@ -41,6 +44,7 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         webView = BackgroundWebView(this).apply {
+            setBackgroundColor(0xFF121212.toInt())
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
@@ -91,16 +95,38 @@ class MainActivity : AppCompatActivity() {
                         switchToBundledFallback()
                     }
                 }
+
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    if (!loadedBundledFallback && url != null && url != BUNDLED_APP_URL) {
+                        if (
+                            url.contains("__cookie_check") ||
+                            url.contains("accounts.google.com")
+                        ) {
+                            switchToBundledFallback()
+                            return
+                        }
+                        view?.evaluateJavascript(
+                            "(function(){var t=(document.body&&document.body.innerText)||'';return t.length<600&&(t.indexOf('was not found')!==-1||t.indexOf('404')!==-1);})()"
+                        ) { result ->
+                            if (result == "true") {
+                                switchToBundledFallback()
+                            }
+                        }
+                    }
+                }
             }
             addJavascriptInterface(SpotiTubeBridge(), "SpotiTubeAndroid")
         }
 
         setContentView(webView)
-        val startUrl = BuildConfig.APP_URL.takeIf { it.startsWith("https://") } ?: BUNDLED_APP_URL
-        if (startUrl == BUNDLED_APP_URL) {
+        val remoteUrl = BuildConfig.APP_URL.takeIf { it.startsWith("https://") }
+        if (remoteUrl == null || remoteUrl == BUNDLED_APP_URL) {
             loadedBundledFallback = true
+            webView.loadUrl(BUNDLED_APP_URL)
+        } else {
+            loadRemoteOrBundled(remoteUrl)
         }
-        webView.loadUrl(startUrl)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -113,9 +139,42 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    private fun loadRemoteOrBundled(remoteUrl: String) {
+        Thread {
+            val remoteReachable = try {
+                val conn = (URL(remoteUrl).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "HEAD"
+                    connectTimeout = 1800
+                    readTimeout = 1800
+                    instanceFollowRedirects = false
+                }
+                val code = conn.responseCode
+                val location = conn.getHeaderField("Location").orEmpty()
+                conn.disconnect()
+                code in 200..299 &&
+                    !location.contains("__cookie_check") &&
+                    !location.contains("accounts.google.com")
+            } catch (_: Exception) {
+                false
+            }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    if (remoteReachable) {
+                        webView.loadUrl(remoteUrl)
+                    } else {
+                        loadedBundledFallback = true
+                        webView.loadUrl(BUNDLED_APP_URL)
+                    }
+                }
+            }
+        }.start()
+    }
+
     private fun switchToBundledFallback() {
+        if (loadedBundledFallback) return
         loadedBundledFallback = true
         webView.post {
+            webView.stopLoading()
             webView.loadUrl(BUNDLED_APP_URL)
         }
     }
