@@ -8,6 +8,10 @@ import {
   setAudioKeepAlivePlaying,
   shouldPreserveIntentOnVisibilityPause
 } from '../utils/backgroundAudio';
+import {
+  showBackgroundNowPlayingNotification,
+  clearBackgroundNowPlayingNotification
+} from '../utils/backgroundPermission';
 
 interface YouTubePlayerEmbedProps {
   currentTrack: Track | null;
@@ -67,6 +71,8 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   const engineModeRef = useRef<EngineMode>('youtube_iframe');
   const activeProbeSeqRef = useRef<number>(0);
   const lastPositionUpdateRef = useRef<number>(0);
+  const keepAliveCtxRef = useRef<AudioContext | null>(null);
+  const keepAliveOscRef = useRef<OscillatorNode | null>(null);
 
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [engineMode, setEngineMode] = useState<EngineMode>('youtube_iframe');
@@ -176,7 +182,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     });
   }, [currentTrack]);
 
-  // Sync MediaSession playbackState & silent WAV keep-alive
+  // Sync MediaSession playbackState, silent WAV + Web Audio keep-alive, and background notification
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
@@ -193,6 +199,40 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     // Only run silent keep-alive when playing via YouTube IFrame (native <audio> keeps session alive itself)
     const needsKeepAlive = Boolean(currentTrack && isPlaying && engineMode === 'youtube_iframe');
     setAudioKeepAlivePlaying(needsKeepAlive);
+
+    if (needsKeepAlive) {
+      try {
+        const AudioCtx =
+          window.AudioContext ||
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (AudioCtx) {
+          if (!keepAliveCtxRef.current || keepAliveCtxRef.current.state === 'closed') {
+            const ctx = new AudioCtx();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.frequency.value = 20;
+            gain.gain.value = 0.0001;
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start();
+            keepAliveCtxRef.current = ctx;
+            keepAliveOscRef.current = osc;
+          } else if (keepAliveCtxRef.current.state === 'suspended') {
+            keepAliveCtxRef.current.resume().catch(() => {});
+          }
+        }
+      } catch {
+        // ignore Web Audio autoplay restrictions
+      }
+    } else if (keepAliveCtxRef.current && keepAliveCtxRef.current.state === 'running') {
+      keepAliveCtxRef.current.suspend().catch(() => {});
+    }
+
+    if (currentTrack && isPlaying && typeof document !== 'undefined' && document.hidden) {
+      void showBackgroundNowPlayingNotification(currentTrack, true);
+    } else if (!isPlaying || !currentTrack) {
+      void clearBackgroundNowPlayingNotification();
+    }
   }, [currentTrack, isPlaying, engineMode]);
 
   // Pre-warm YouTube IFrame API, track playback ticker, and mobile visibilitychange guard
@@ -202,8 +242,13 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     const handleVisibilityChange = () => {
       if (document.hidden) {
         lastHiddenAtRef.current = Date.now();
+        if (isPlayingRef.current && currentTrackRef.current) {
+          void showBackgroundNowPlayingNotification(currentTrackRef.current, true);
+        }
         return;
       }
+
+      void clearBackgroundNowPlayingNotification();
 
       // Returning to foreground: ensure active engine matches user intent
       if (isPlayingRef.current && currentTrackRef.current) {
@@ -275,6 +320,17 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       setAudioKeepAlivePlaying(false);
+      try {
+        keepAliveOscRef.current?.stop();
+      } catch {
+        // ignore
+      }
+      if (keepAliveCtxRef.current && keepAliveCtxRef.current.state !== 'closed') {
+        keepAliveCtxRef.current.close().catch(() => {});
+      }
+      keepAliveOscRef.current = null;
+      keepAliveCtxRef.current = null;
+      void clearBackgroundNowPlayingNotification();
     };
   }, []);
 

@@ -154,14 +154,29 @@ async function searchClientMirrors(query: string): Promise<Track[]> {
  * falling back to cached frequently played metadata + curated catalog during offline/intermittent connectivity).
  */
 export async function searchYouTube(
-  query: string
+  query: string,
+  options?: { offlineOnly?: boolean }
 ): Promise<{ tracks: Track[]; source: 'local_backend' | 'curated'; message?: string }> {
   const trimmed = query.trim();
+  const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+  const offlineOnly = Boolean(options?.offlineOnly) || !isOnline;
+
+  if (offlineOnly) {
+    const cachedMatches = searchCachedTracks(loadCachedTrackEntries(), trimmed);
+    return {
+      tracks: cachedMatches,
+      source: 'curated',
+      message:
+        cachedMatches.length > 0
+          ? `Offline (Auto) — showing ${cachedMatches.length} cached ${cachedMatches.length === 1 ? 'track' : 'tracks'} only`
+          : 'Offline (Auto) — no matching cached tracks found'
+    };
+  }
+
   if (!trimmed) {
     return { tracks: CURATED_TRACKS, source: 'curated' };
   }
 
-  const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
   const searchApiUrl = `/api/search?q=${encodeURIComponent(trimmed)}`;
 
   // 1. Try /api/search (CacheFirst via Service Worker; when offline check Cache Storage directly first)

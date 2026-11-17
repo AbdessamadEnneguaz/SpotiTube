@@ -29,6 +29,7 @@ import { CreatePlaylistModal } from './components/CreatePlaylistModal';
 import { YouTubePlayerEmbed } from './components/YouTubePlayerEmbed';
 import { CoverImage } from './components/CoverImage';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { BackgroundPermissionModal } from './components/BackgroundPermissionModal';
 import { CURATED_TRACKS, PLAYLISTS } from './data/curatedTracks';
 import { Track, Playlist, RepeatMode } from './types/music';
 import { searchYouTube } from './services/youtubeApi';
@@ -56,6 +57,17 @@ import {
   syncTrackToServiceWorkerCache,
   warmCuratedCoversCache
 } from './utils/trackCache';
+import {
+  getCachedYoutubeIdSet,
+  isTrackPlayableOffline,
+  filterTracksForOffline
+} from './utils/offlineMode';
+import {
+  shouldAutoPromptPermissionsOnEntry,
+  loadPermissionsPrompted,
+  getNotificationPermissionState
+} from './utils/backgroundPermission';
+import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { formatDuration } from './utils/formatters';
 import { safeParseJson, sanitizeMediaUrl, sanitizeClientText } from './utils/security';
 import { unlockAudioKeepAlive } from './utils/backgroundAudio';
@@ -78,9 +90,31 @@ export default function App() {
     loadCachedTrackEntries()
   );
 
+  // Automatic Offline Detection (no manual toggle — switches automatically on network loss/recovery)
+  const isOnline = useOnlineStatus();
+  const isOfflineMode = !isOnline;
+  const wasOnlineRef = useRef(isOnline);
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+
   useEffect(() => {
     saveCachedTrackEntries(cachedTrackEntries);
   }, [cachedTrackEntries]);
+
+  useEffect(() => {
+    if (wasOnlineRef.current === isOnline) return;
+    wasOnlineRef.current = isOnline;
+    setOfflineNotice(
+      isOnline
+        ? 'Internet restored — live search & full streaming enabled'
+        : `Offline detected — playing ${cachedTrackEntries.length} cached ${cachedTrackEntries.length === 1 ? 'track' : 'tracks'} only`
+    );
+  }, [isOnline, cachedTrackEntries.length]);
+
+  useEffect(() => {
+    if (!offlineNotice) return;
+    const t = setTimeout(() => setOfflineNotice(null), 3500);
+    return () => clearTimeout(t);
+  }, [offlineNotice]);
 
   useEffect(() => {
     // Pre-warm initial cover artwork thumbnails into Cache Storage on idle
@@ -92,6 +126,14 @@ export default function App() {
 
   const frequentTracks = useMemo(() => {
     return getFrequentTracks(cachedTrackEntries, 5);
+  }, [cachedTrackEntries]);
+
+  const cachedYoutubeIds = useMemo(() => {
+    return getCachedYoutubeIdSet(cachedTrackEntries);
+  }, [cachedTrackEntries]);
+
+  const cachedTracksList = useMemo(() => {
+    return cachedTrackEntries.map((entry) => entry.track);
   }, [cachedTrackEntries]);
 
   // Save recent searches to localStorage
@@ -124,6 +166,12 @@ export default function App() {
   const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [isExpandedCoverOpen, setIsExpandedCoverOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
+  const [isBgPermissionOpen, setIsBgPermissionOpen] = useState<boolean>(() =>
+    shouldAutoPromptPermissionsOnEntry({
+      alreadyPrompted: loadPermissionsPrompted(),
+      notificationPermission: getNotificationPermissionState()
+    })
+  );
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [legalTab, setLegalTab] = useState<'privacy' | 'terms' | 'dmca' | 'cookies'>('privacy');
@@ -293,18 +341,41 @@ export default function App() {
     return allPlaylists.find(p => p.id === selectedPlaylistId) || null;
   }, [selectedPlaylistId, likedTracks, allPlaylists]);
 
-  // Search effect with debounce
+  // Search effect with debounce (strictly cached-only when offline is detected)
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
-      setSearchResults(CURATED_TRACKS);
-      setSearchStatusMsg(null);
+      if (isOfflineMode) {
+        setSearchResults(cachedTracksList);
+        setSearchStatusMsg(
+          cachedTracksList.length > 0
+            ? `Offline (Auto) — showing ${cachedTracksList.length} cached ${cachedTracksList.length === 1 ? 'track' : 'tracks'} only`
+            : 'Offline (Auto) — no cached tracks saved yet'
+        );
+      } else {
+        setSearchResults(CURATED_TRACKS);
+        setSearchStatusMsg(null);
+      }
+      setIsSearching(false);
       return;
+    }
+
+    if (isOfflineMode) {
+      let cancelled = false;
+      setIsSearching(false);
+      void searchYouTube(searchQuery, { offlineOnly: true }).then((res) => {
+        if (cancelled) return;
+        setSearchResults(res.tracks);
+        setSearchStatusMsg(res.message || 'Offline (Auto) — cached search only');
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
     const timer = setTimeout(async () => {
       setIsSearching(true);
-      const res = await searchYouTube(searchQuery);
+      const res = await searchYouTube(searchQuery, { offlineOnly: false });
       setSearchResults(res.tracks);
       setIsSearching(false);
       if (res.source === 'local_backend') {
@@ -320,19 +391,35 @@ export default function App() {
     }, 350);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [searchQuery, isOfflineMode, cachedTracksList]);
+
+  const handleCacheTrack = useCallback((track: Track) => {
+    setCachedTrackEntries(prev => {
+      const updated = recordTrackPlay(prev, track);
+      saveCachedTrackEntries(updated);
+      return updated;
+    });
+    void syncTrackToServiceWorkerCache(track);
+    setOfflineNotice(`Cached "${track.title}" for offline playback`);
+  }, []);
 
   // Track playback handlers
   const handlePlayTrack = useCallback((track: Track, contextList?: Track[]) => {
+    if (!isTrackPlayableOffline(track, cachedYoutubeIds, isOfflineMode)) {
+      setOfflineNotice(`"${track.title}" requires an internet connection.`);
+      return;
+    }
+
     unlockAudioKeepAlive();
-    const activeList = contextList || (currentView === 'search' ? searchResults : displayedTracks);
+    const rawList = contextList || (currentView === 'search' ? searchResults : displayedTracks);
+    const activeList = filterTracksForOffline(rawList, cachedYoutubeIds, isOfflineMode);
     const foundIndex = activeList.findIndex(t => t.id === track.id || t.youtubeId === track.youtubeId);
 
     if (foundIndex >= 0) {
       setQueue(activeList);
       setQueueIndex(foundIndex);
     } else {
-      const updatedQueue = [...queue, track];
+      const updatedQueue = [...filterTracksForOffline(queue, cachedYoutubeIds, isOfflineMode), track];
       setQueue(updatedQueue);
       setQueueIndex(updatedQueue.length - 1);
     }
@@ -343,20 +430,31 @@ export default function App() {
     setDuration(track.durationSeconds || 210);
 
     // Cache track metadata & thumbnail for Cache-First offline/intermittent resilience
-    setCachedTrackEntries(prev => recordTrackPlay(prev, track));
+    setCachedTrackEntries(prev => {
+      const updated = recordTrackPlay(prev, track);
+      saveCachedTrackEntries(updated);
+      return updated;
+    });
     void syncTrackToServiceWorkerCache(track);
-  }, [currentView, searchResults, displayedTracks, queue]);
+  }, [currentView, searchResults, displayedTracks, queue, cachedYoutubeIds, isOfflineMode]);
 
   const handlePlayPause = useCallback(() => {
     unlockAudioKeepAlive();
     if (!currentTrack) {
       if (queue.length > 0) {
-        handlePlayTrack(queue[0]);
+        const firstPlayable = filterTracksForOffline(queue, cachedYoutubeIds, isOfflineMode)[0];
+        if (firstPlayable) {
+          handlePlayTrack(firstPlayable);
+        }
       }
       return;
     }
+    if (!isPlaying && !isTrackPlayableOffline(currentTrack, cachedYoutubeIds, isOfflineMode)) {
+      setOfflineNotice(`"${currentTrack.title}" is unavailable while offline.`);
+      return;
+    }
     setIsPlaying(prev => !prev);
-  }, [currentTrack, queue, handlePlayTrack]);
+  }, [currentTrack, isPlaying, queue, cachedYoutubeIds, isOfflineMode, handlePlayTrack]);
 
   const handleNext = useCallback(() => {
     // If sleep timer is set to "End of track", stop playback on completion
@@ -368,8 +466,23 @@ export default function App() {
 
     const nextIdx = getNextIndex(queue.length, queueIndex, repeatMode, isShuffle, shuffledIndices);
     if (nextIdx !== null && nextIdx >= 0 && nextIdx < queue.length) {
-      setQueueIndex(nextIdx);
       const nextTrack = queue[nextIdx];
+      if (!isTrackPlayableOffline(nextTrack, cachedYoutubeIds, isOfflineMode)) {
+        const fallbackIdx = queue.findIndex((t) => isTrackPlayableOffline(t, cachedYoutubeIds, isOfflineMode));
+        if (fallbackIdx < 0) {
+          setIsPlaying(false);
+          setOfflineNotice('No more cached tracks in queue while offline.');
+          return;
+        }
+        const fallbackTrack = queue[fallbackIdx];
+        setQueueIndex(fallbackIdx);
+        setCurrentTrack(fallbackTrack);
+        setIsPlaying(true);
+        setCurrentTime(0);
+        setDuration(fallbackTrack.durationSeconds || 210);
+        return;
+      }
+      setQueueIndex(nextIdx);
       setCurrentTrack(nextTrack);
       setIsPlaying(true);
       setCurrentTime(0);
@@ -377,7 +490,7 @@ export default function App() {
     } else {
       setIsPlaying(false);
     }
-  }, [queue, queueIndex, repeatMode, isShuffle, shuffledIndices, sleepTimerMinutes]);
+  }, [queue, queueIndex, repeatMode, isShuffle, shuffledIndices, sleepTimerMinutes, cachedYoutubeIds, isOfflineMode]);
 
   const handlePrevious = useCallback(() => {
     if (currentTime > 3) {
@@ -387,14 +500,18 @@ export default function App() {
     }
     const prevIdx = getPreviousIndex(queue.length, queueIndex, isShuffle, shuffledIndices);
     if (prevIdx !== null && prevIdx >= 0 && prevIdx < queue.length) {
-      setQueueIndex(prevIdx);
       const prevTrack = queue[prevIdx];
+      if (!isTrackPlayableOffline(prevTrack, cachedYoutubeIds, isOfflineMode)) {
+        setOfflineNotice('Previous track requires internet connection.');
+        return;
+      }
+      setQueueIndex(prevIdx);
       setCurrentTrack(prevTrack);
       setIsPlaying(true);
       setCurrentTime(0);
       setDuration(prevTrack.durationSeconds || 210);
     }
-  }, [currentTime, queue, queueIndex, isShuffle, shuffledIndices]);
+  }, [currentTime, queue, queueIndex, isShuffle, shuffledIndices, cachedYoutubeIds, isOfflineMode]);
 
   const handleSeek = useCallback((seconds: number) => {
     setSeekTarget(seconds);
@@ -480,13 +597,13 @@ export default function App() {
 
   const handleTrackError = useCallback(async (failedTrack: Track, errorCode: number) => {
     // Codes 100, 101, 150 indicate video unavailable or embedding restricted by uploader
-    if (errorCode === 100 || errorCode === 101 || errorCode === 150) {
+    if ((errorCode === 100 || errorCode === 101 || errorCode === 150) && !isOfflineMode) {
       failedFallbackIdsRef.current.add(failedTrack.youtubeId);
       const attempts = fallbackAttemptsRef.current[failedTrack.id] || 0;
       if (attempts < 1) {
         fallbackAttemptsRef.current[failedTrack.id] = attempts + 1;
         try {
-          const res = await searchYouTube(`${failedTrack.title} ${failedTrack.artist} audio`);
+          const res = await searchYouTube(`${failedTrack.title} ${failedTrack.artist} audio`, { offlineOnly: false });
           const alternative = res.tracks.find(
             (t) => t.youtubeId && !failedFallbackIdsRef.current.has(t.youtubeId)
           );
@@ -505,7 +622,7 @@ export default function App() {
       }
     }
     setIsPlaying(false);
-  }, []);
+  }, [isOfflineMode]);
 
   const lastTimeRef = useRef(0);
   const handleTimeUpdate = useCallback((curr: number, dur: number) => {
@@ -551,6 +668,7 @@ export default function App() {
             currentView={currentView}
             searchQuery={searchQuery}
             recentSearches={recentSearches}
+            isOfflineMode={isOfflineMode}
             onSearchChange={(q) => {
               setSearchQuery(q);
               if (currentView !== 'search' && q.trim()) {
@@ -634,7 +752,10 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => {
-                      if (activePlaylist.tracks.length > 0) {
+                      const playable = filterTracksForOffline(activePlaylist.tracks, cachedYoutubeIds, isOfflineMode);
+                      if (playable.length > 0) {
+                        handlePlayTrack(playable[0], activePlaylist.tracks);
+                      } else if (activePlaylist.tracks.length > 0) {
                         handlePlayTrack(activePlaylist.tracks[0], activePlaylist.tracks);
                       }
                     }}
@@ -662,22 +783,28 @@ export default function App() {
                       </p>
                     </div>
                   ) : (
-                    activePlaylist.tracks.map((track, idx) => (
-                      <TrackRow
-                        key={`${track.id}-${idx}`}
-                        track={track}
-                        index={idx}
-                        isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
-                        isPlaying={isPlaying}
-                        isLiked={likedTrackIds.has(track.id)}
-                        customPlaylists={customPlaylists}
-                        onPlay={(t) => handlePlayTrack(t, activePlaylist.tracks)}
-                        onToggleLike={handleToggleLike}
-                        onAddToQueue={handleAddToQueue}
-                        onPlayNext={handlePlayNext}
-                        onAddToPlaylist={handleAddToPlaylist}
-                      />
-                    ))
+                    activePlaylist.tracks.map((track, idx) => {
+                      const isCached = cachedYoutubeIds.has(track.youtubeId);
+                      return (
+                        <TrackRow
+                          key={`${track.id}-${idx}`}
+                          track={track}
+                          index={idx}
+                          isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
+                          isPlaying={isPlaying}
+                          isLiked={likedTrackIds.has(track.id)}
+                          isCached={isCached}
+                          isOfflineDisabled={isOfflineMode && !isCached}
+                          customPlaylists={customPlaylists}
+                          onPlay={(t) => handlePlayTrack(t, activePlaylist.tracks)}
+                          onToggleLike={handleToggleLike}
+                          onAddToQueue={handleAddToQueue}
+                          onPlayNext={handlePlayNext}
+                          onAddToPlaylist={handleAddToPlaylist}
+                          onCacheTrack={handleCacheTrack}
+                        />
+                      );
+                    })
                   )}
                 </div>
               </div>
@@ -700,9 +827,49 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Case 1: When user has not typed a query, show Recent Searches & Browse categories */}
+                {/* Case 1: When user has not typed a query, show Cached Tracks (if Offline), Recent Searches & Browse categories */}
                 {!searchQuery.trim() ? (
                   <div className="space-y-6 sm:space-y-8">
+                    {isOfflineMode && (
+                      <section className="space-y-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                            Cached Tracks (Offline)
+                          </h2>
+                          <span className="text-xs font-mono text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full">
+                            {cachedTracksList.length} cached
+                          </span>
+                        </div>
+                        {cachedTracksList.length === 0 ? (
+                          <div className="rounded-xl bg-neutral-900/70 border border-neutral-800 p-5 text-sm text-neutral-300">
+                            No cached tracks yet. Play any track or choose &ldquo;Cache for Offline&rdquo; while connected to listen without internet.
+                          </div>
+                        ) : (
+                          <div className="space-y-1">
+                            {cachedTracksList.map((track, idx) => (
+                              <TrackRow
+                                key={`cached-${track.youtubeId}-${idx}`}
+                                track={track}
+                                index={idx}
+                                isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
+                                isPlaying={isPlaying}
+                                isLiked={likedTrackIds.has(track.id)}
+                                isCached
+                                isOfflineDisabled={false}
+                                customPlaylists={customPlaylists}
+                                onPlay={(t) => handlePlayTrack(t, cachedTracksList)}
+                                onToggleLike={handleToggleLike}
+                                onAddToQueue={handleAddToQueue}
+                                onPlayNext={handlePlayNext}
+                                onAddToPlaylist={handleAddToPlaylist}
+                                onCacheTrack={handleCacheTrack}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </section>
+                    )}
+
                     {/* Persistent Recent Searches Section */}
                     {recentSearches.length > 0 && (
                       <RecentSearches
@@ -758,22 +925,28 @@ export default function App() {
                           <span className="hidden md:block w-1/4">Genre</span>
                           <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
                         </div>
-                        {CURATED_TRACKS.slice(0, 8).map((track, idx) => (
-                          <TrackRow
-                            key={`${track.id}-${idx}`}
-                            track={track}
-                            index={idx}
-                            isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
-                            isPlaying={isPlaying}
-                            isLiked={likedTrackIds.has(track.id)}
-                            customPlaylists={customPlaylists}
-                            onPlay={(t) => handlePlayTrack(t, CURATED_TRACKS)}
-                            onToggleLike={handleToggleLike}
-                            onAddToQueue={handleAddToQueue}
-                            onPlayNext={handlePlayNext}
-                            onAddToPlaylist={handleAddToPlaylist}
-                          />
-                        ))}
+                        {CURATED_TRACKS.slice(0, 8).map((track, idx) => {
+                          const isCached = cachedYoutubeIds.has(track.youtubeId);
+                          return (
+                            <TrackRow
+                              key={`${track.id}-${idx}`}
+                              track={track}
+                              index={idx}
+                              isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
+                              isPlaying={isPlaying}
+                              isLiked={likedTrackIds.has(track.id)}
+                              isCached={isCached}
+                              isOfflineDisabled={isOfflineMode && !isCached}
+                              customPlaylists={customPlaylists}
+                              onPlay={(t) => handlePlayTrack(t, CURATED_TRACKS)}
+                              onToggleLike={handleToggleLike}
+                              onAddToQueue={handleAddToQueue}
+                              onPlayNext={handlePlayNext}
+                              onAddToPlaylist={handleAddToPlaylist}
+                              onCacheTrack={handleCacheTrack}
+                            />
+                          );
+                        })}
                       </div>
                     </section>
                   </div>
@@ -808,7 +981,11 @@ export default function App() {
                     ) : searchResults.length === 0 ? (
                       <div className="text-center py-16 text-neutral-400 space-y-2">
                         <p className="text-lg font-bold text-white">No results found for "{searchQuery}"</p>
-                        <p className="text-sm">Please check your spelling or try searching for another artist or genre.</p>
+                        <p className="text-sm">
+                          {isOfflineMode
+                            ? 'You are currently offline. Only cached tracks are searchable until your connection returns.'
+                            : 'Please check your spelling or try searching for another artist or genre.'}
+                        </p>
                       </div>
                     ) : (
                       <div className="space-y-1">
@@ -819,25 +996,31 @@ export default function App() {
                           <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
                         </div>
 
-                        {searchResults.map((track, idx) => (
-                          <TrackRow
-                            key={`${track.id}-${idx}`}
-                            track={track}
-                            index={idx}
-                            isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
-                            isPlaying={isPlaying}
-                            isLiked={likedTrackIds.has(track.id)}
-                            customPlaylists={customPlaylists}
-                            onPlay={(t) => {
-                              handleAddRecentSearch(searchQuery);
-                              handlePlayTrack(t, searchResults);
-                            }}
-                            onToggleLike={handleToggleLike}
-                            onAddToQueue={handleAddToQueue}
-                            onPlayNext={handlePlayNext}
-                            onAddToPlaylist={handleAddToPlaylist}
-                          />
-                        ))}
+                        {searchResults.map((track, idx) => {
+                          const isCached = cachedYoutubeIds.has(track.youtubeId);
+                          return (
+                            <TrackRow
+                              key={`${track.id}-${idx}`}
+                              track={track}
+                              index={idx}
+                              isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
+                              isPlaying={isPlaying}
+                              isLiked={likedTrackIds.has(track.id)}
+                              isCached={isCached}
+                              isOfflineDisabled={isOfflineMode && !isCached}
+                              customPlaylists={customPlaylists}
+                              onPlay={(t) => {
+                                handleAddRecentSearch(searchQuery);
+                                handlePlayTrack(t, searchResults);
+                              }}
+                              onToggleLike={handleToggleLike}
+                              onAddToQueue={handleAddToQueue}
+                              onPlayNext={handlePlayNext}
+                              onAddToPlaylist={handleAddToPlaylist}
+                              onCacheTrack={handleCacheTrack}
+                            />
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -885,7 +1068,10 @@ export default function App() {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (item.tracks.length > 0) {
+                            const playable = filterTracksForOffline(item.tracks, cachedYoutubeIds, isOfflineMode);
+                            if (playable.length > 0) {
+                              handlePlayTrack(playable[0], item.tracks);
+                            } else if (item.tracks.length > 0) {
                               handlePlayTrack(item.tracks[0], item.tracks);
                             }
                           }}
@@ -994,13 +1180,15 @@ export default function App() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                       {CURATED_TRACKS.filter(t => t.genre === 'chaabi').map((track) => {
                         const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        const isCached = cachedYoutubeIds.has(track.youtubeId);
+                        const isOfflineDisabled = isOfflineMode && !isCached;
                         return (
                           <div
                             key={track.id}
                             onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
-                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
-                            }`}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
+                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
+                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
                           >
                             <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                               <CoverImage
@@ -1008,34 +1196,37 @@ export default function App() {
                                 alt={track.title}
                                 youtubeId={track.youtubeId}
                                 loading="eager"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
                               />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCurrent && isPlaying) {
-                                    handlePlayPause();
-                                  } else {
-                                    handlePlayTrack(track);
-                                  }
-                                }}
-                                aria-label={`Play ${track.title}`}
-                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                              >
-                                {isCurrent && isPlaying ? (
-                                  <Pause className="w-4 h-4 fill-current" />
-                                ) : (
-                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                )}
-                              </button>
+                              {!isOfflineDisabled && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isCurrent && isPlaying) {
+                                      handlePlayPause();
+                                    } else {
+                                      handlePlayTrack(track);
+                                    }
+                                  }}
+                                  aria-label={`Play ${track.title}`}
+                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                                >
+                                  {isCurrent && isPlaying ? (
+                                    <Pause className="w-4 h-4 fill-current" />
+                                  ) : (
+                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                             <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                               {track.title}
                             </div>
                             <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                               {track.artist}
+                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
                             </div>
                           </div>
                         );
@@ -1071,13 +1262,15 @@ export default function App() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                       {CURATED_TRACKS.filter(t => t.genre === 'rai').map((track) => {
                         const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        const isCached = cachedYoutubeIds.has(track.youtubeId);
+                        const isOfflineDisabled = isOfflineMode && !isCached;
                         return (
                           <div
                             key={track.id}
                             onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
-                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
-                            }`}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
+                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
+                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
                           >
                             <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                               <CoverImage
@@ -1085,34 +1278,37 @@ export default function App() {
                                 alt={track.title}
                                 youtubeId={track.youtubeId}
                                 loading="eager"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
                               />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCurrent && isPlaying) {
-                                    handlePlayPause();
-                                  } else {
-                                    handlePlayTrack(track);
-                                  }
-                                }}
-                                aria-label={`Play ${track.title}`}
-                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                              >
-                                {isCurrent && isPlaying ? (
-                                  <Pause className="w-4 h-4 fill-current" />
-                                ) : (
-                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                )}
-                              </button>
+                              {!isOfflineDisabled && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isCurrent && isPlaying) {
+                                      handlePlayPause();
+                                    } else {
+                                      handlePlayTrack(track);
+                                    }
+                                  }}
+                                  aria-label={`Play ${track.title}`}
+                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                                >
+                                  {isCurrent && isPlaying ? (
+                                    <Pause className="w-4 h-4 fill-current" />
+                                  ) : (
+                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                             <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                               {track.title}
                             </div>
                             <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                               {track.artist}
+                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
                             </div>
                           </div>
                         );
@@ -1148,13 +1344,15 @@ export default function App() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                       {CURATED_TRACKS.filter(t => t.genre === 'rap').map((track) => {
                         const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        const isCached = cachedYoutubeIds.has(track.youtubeId);
+                        const isOfflineDisabled = isOfflineMode && !isCached;
                         return (
                           <div
                             key={track.id}
                             onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
-                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
-                            }`}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
+                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
+                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
                           >
                             <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                               <CoverImage
@@ -1162,34 +1360,37 @@ export default function App() {
                                 alt={track.title}
                                 youtubeId={track.youtubeId}
                                 loading="eager"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
                               />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCurrent && isPlaying) {
-                                    handlePlayPause();
-                                  } else {
-                                    handlePlayTrack(track);
-                                  }
-                                }}
-                                aria-label={`Play ${track.title}`}
-                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                              >
-                                {isCurrent && isPlaying ? (
-                                  <Pause className="w-4 h-4 fill-current" />
-                                ) : (
-                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                )}
-                              </button>
+                              {!isOfflineDisabled && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isCurrent && isPlaying) {
+                                      handlePlayPause();
+                                    } else {
+                                      handlePlayTrack(track);
+                                    }
+                                  }}
+                                  aria-label={`Play ${track.title}`}
+                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                                >
+                                  {isCurrent && isPlaying ? (
+                                    <Pause className="w-4 h-4 fill-current" />
+                                  ) : (
+                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                             <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                               {track.title}
                             </div>
                             <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                               {track.artist}
+                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
                             </div>
                           </div>
                         );
@@ -1225,13 +1426,15 @@ export default function App() {
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
                       {CURATED_TRACKS.filter(t => t.genre === 'global').map((track) => {
                         const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+                        const isCached = cachedYoutubeIds.has(track.youtubeId);
+                        const isOfflineDisabled = isOfflineMode && !isCached;
                         return (
                           <div
                             key={track.id}
                             onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
-                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
-                            }`}
+                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
+                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
+                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
                           >
                             <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
                               <CoverImage
@@ -1239,34 +1442,37 @@ export default function App() {
                                 alt={track.title}
                                 youtubeId={track.youtubeId}
                                 loading="eager"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
                               />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCurrent && isPlaying) {
-                                    handlePlayPause();
-                                  } else {
-                                    handlePlayTrack(track);
-                                  }
-                                }}
-                                aria-label={`Play ${track.title}`}
-                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                              >
-                                {isCurrent && isPlaying ? (
-                                  <Pause className="w-4 h-4 fill-current" />
-                                ) : (
-                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                )}
-                              </button>
+                              {!isOfflineDisabled && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isCurrent && isPlaying) {
+                                      handlePlayPause();
+                                    } else {
+                                      handlePlayTrack(track);
+                                    }
+                                  }}
+                                  aria-label={`Play ${track.title}`}
+                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
+                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
+                                >
+                                  {isCurrent && isPlaying ? (
+                                    <Pause className="w-4 h-4 fill-current" />
+                                  ) : (
+                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                                  )}
+                                </button>
+                              )}
                             </div>
                             <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
                               {track.title}
                             </div>
                             <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
                               {track.artist}
+                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
                             </div>
                           </div>
                         );
@@ -1355,8 +1561,12 @@ export default function App() {
           queueIndex={queueIndex}
           onPlayTrackAt={(idx) => {
             if (idx >= 0 && idx < queue.length) {
-              setQueueIndex(idx);
               const track = queue[idx];
+              if (!isTrackPlayableOffline(track, cachedYoutubeIds, isOfflineMode)) {
+                setOfflineNotice(`"${track.title}" requires an internet connection.`);
+                return;
+              }
+              setQueueIndex(idx);
               setCurrentTrack(track);
               setIsPlaying(true);
               setCurrentTime(0);
@@ -1478,7 +1688,27 @@ export default function App() {
         onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
       />
 
-      {/* Offline Connectivity Banner */}
+      {/* Background Playback Permission Modal */}
+      <BackgroundPermissionModal
+        isOpen={isBgPermissionOpen}
+        onClose={() => setIsBgPermissionOpen(false)}
+        onPermissionGranted={() => {
+          setOfflineNotice('All permissions allowed — background & offline mode ready');
+        }}
+      />
+
+      {/* Non-intrusive notice pill for offline restrictions & cache confirmations */}
+      {offlineNotice && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-44 md:bottom-36 left-1/2 -translate-x-1/2 z-50 rounded-full bg-neutral-900/95 border border-neutral-700 px-4 py-2 text-xs font-semibold text-white shadow-2xl whitespace-nowrap max-w-[92vw] truncate"
+        >
+          {offlineNotice}
+        </div>
+      )}
+
+      {/* Automatic Offline Connectivity Banner */}
       <OfflineIndicator cachedTrackCount={cachedTrackEntries.length} />
 
       {/* Legal & Compliance Modal (Privacy Policy, Terms of Service, DMCA, Cookies) */}

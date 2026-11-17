@@ -6,6 +6,7 @@ interface HeaderProps {
   currentView: string;
   searchQuery: string;
   recentSearches: string[];
+  isOfflineMode?: boolean;
   onSearchChange: (q: string) => void;
   onSubmitSearch?: (q: string) => void;
   onSelectRecentSearch?: (q: string) => void;
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   currentView,
   searchQuery,
   recentSearches,
+  isOfflineMode = false,
   onSearchChange,
   onSubmitSearch,
   onSelectRecentSearch,
@@ -152,7 +154,11 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                     setIsHistoryOpen(false);
                   }
                 }}
-                placeholder="Search songs, artists, Chaabi, Rai, Rap..."
+                placeholder={
+                  isOfflineMode
+                    ? 'Search cached tracks only (No Internet)...'
+                    : 'Search songs, artists, Chaabi, Rai, Rap...'
+                }
                 aria-label="Search music"
                 className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-sm pl-9 pr-9 py-2 rounded-full border border-transparent focus:border-neutral-500 focus:outline-none transition-all placeholder:text-neutral-500 shadow-inner"
               />
@@ -245,7 +251,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-neutral-800/80 border border-neutral-700 text-neutral-300 hover:bg-neutral-700 hover:text-white transition-all cursor-pointer"
           >
             <Moon className="w-3.5 h-3.5 text-purple-400" />
-            <span>Sleep Timer</span>
+            <span className="hidden lg:inline">Sleep Timer</span>
           </button>
 
           <button
@@ -256,7 +262,8 @@ export const Header: React.FC<HeaderProps> = React.memo(({
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-neutral-800/80 border border-neutral-700 hover:border-neutral-500 text-neutral-300 hover:text-white transition-all cursor-pointer"
           >
             <span className="w-2 h-2 rounded-full bg-[#1db954]" />
-            <span>Privacy & Legal</span>
+            <span className="hidden lg:inline">Privacy & Legal</span>
+            <span className="lg:hidden">Legal</span>
           </button>
         </div>
       </div>

@@ -6,7 +6,9 @@ interface OfflineIndicatorProps {
   cachedTrackCount?: number;
 }
 
-export const OfflineIndicator: React.FC<OfflineIndicatorProps> = React.memo(({ cachedTrackCount = 0 }) => {
+export const OfflineIndicator: React.FC<OfflineIndicatorProps> = React.memo(({
+  cachedTrackCount = 0
+}) => {
   const isOnline = useOnlineStatus();
 
   if (isOnline) return null;
@@ -19,7 +21,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = React.memo(({ c
     >
       <WifiOff className="w-3.5 h-3.5 shrink-0" />
       <span>
-        Offline Mode — Cached metadata{cachedTrackCount > 0 ? ` (${cachedTrackCount} tracks)` : ''} &amp; covers active
+        No Internet — Playing cached tracks only ({cachedTrackCount} {cachedTrackCount === 1 ? 'track' : 'tracks'})
       </span>
     </div>
   );

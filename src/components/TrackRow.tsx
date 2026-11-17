@@ -9,12 +9,15 @@ interface TrackRowProps {
   isCurrent: boolean;
   isPlaying: boolean;
   isLiked: boolean;
+  isCached?: boolean;
+  isOfflineDisabled?: boolean;
   customPlaylists?: Playlist[];
   onPlay: (track: Track) => void;
   onToggleLike: (track: Track) => void;
   onAddToQueue: (track: Track) => void;
   onPlayNext: (track: Track) => void;
   onAddToPlaylist?: (playlistId: string, track: Track) => void;
+  onCacheTrack?: (track: Track) => void;
 }
 
 export const TrackRow: React.FC<TrackRowProps> = React.memo(({
@@ -23,20 +26,27 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
   isCurrent,
   isPlaying,
   isLiked,
+  isCached = false,
+  isOfflineDisabled = false,
   customPlaylists = [],
   onPlay,
   onToggleLike,
   onAddToQueue,
   onPlayNext,
-  onAddToPlaylist
+  onAddToPlaylist,
+  onCacheTrack
 }) => {
   const [showMenu, setShowMenu] = React.useState(false);
   const [showPlaylistsSubmenu, setShowPlaylistsSubmenu] = React.useState(false);
 
   return (
     <div
-      className={`group flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2.5 rounded-md hover:bg-neutral-800/60 transition-colors text-sm select-none ${
-        isCurrent ? 'bg-neutral-800/40 text-white' : 'text-neutral-400'
+      className={`group flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2.5 rounded-md transition-colors text-sm select-none ${
+        isOfflineDisabled
+          ? 'opacity-45 text-neutral-500 cursor-not-allowed'
+          : isCurrent
+            ? 'bg-neutral-800/40 text-white hover:bg-neutral-800/60'
+            : 'text-neutral-400 hover:bg-neutral-800/60'
       }`}
     >
       {/* Index or Play / Pause Indicator */}
@@ -55,16 +65,18 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
           </button>
         ) : (
           <>
-            <span className="group-hover:hidden text-xs font-mono">
+            <span className={`${isOfflineDisabled ? '' : 'group-hover:hidden'} text-xs font-mono`}>
               {isCurrent ? <span className="text-[#1db954] font-bold">▶</span> : index + 1}
             </span>
-            <button
-              onClick={() => onPlay(track)}
-              aria-label={`Play ${track.title} by ${track.artist}`}
-              className="hidden group-hover:flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
-            >
-              <Play className="w-4 h-4 fill-current text-white" />
-            </button>
+            {!isOfflineDisabled && (
+              <button
+                onClick={() => onPlay(track)}
+                aria-label={`Play ${track.title} by ${track.artist}`}
+                className="hidden group-hover:flex items-center justify-center text-white hover:scale-110 transition-transform cursor-pointer"
+              >
+                <Play className="w-4 h-4 fill-current text-white" />
+              </button>
+            )}
           </>
         )}
       </div>
@@ -75,20 +87,40 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
           src={track.thumbnail}
           alt={track.title}
           youtubeId={track.youtubeId}
-          onClick={() => onPlay(track)}
-          className="w-10 h-10 rounded object-cover shrink-0 bg-neutral-800 cursor-pointer"
+          onClick={() => {
+            if (!isOfflineDisabled) onPlay(track);
+          }}
+          className={`w-10 h-10 rounded object-cover shrink-0 bg-neutral-800 ${
+            isOfflineDisabled ? 'grayscale' : 'cursor-pointer'
+          }`}
         />
         <div className="truncate min-w-0 flex-1">
           <div
-            onClick={() => onPlay(track)}
-            className={`font-medium truncate cursor-pointer hover:underline ${
-              isCurrent ? 'text-[#1db954] font-bold' : 'text-white'
+            onClick={() => {
+              if (!isOfflineDisabled) onPlay(track);
+            }}
+            className={`font-medium truncate ${
+              isOfflineDisabled
+                ? 'text-neutral-400'
+                : isCurrent
+                  ? 'text-[#1db954] font-bold cursor-pointer hover:underline'
+                  : 'text-white cursor-pointer hover:underline'
             }`}
           >
             {track.title}
           </div>
-          <div className="text-xs text-neutral-400 truncate hover:text-white cursor-pointer">
-            {track.artist}
+          <div className="text-xs text-neutral-400 truncate flex items-center gap-1.5">
+            <span className="truncate">{track.artist}</span>
+            {isCached && (
+              <span className="text-[10px] font-semibold text-emerald-400 shrink-0">
+                • Cached
+              </span>
+            )}
+            {isOfflineDisabled && (
+              <span className="text-[10px] font-semibold text-amber-400/90 shrink-0">
+                • Online only
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -160,6 +192,18 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
               >
                 <span>{isLiked ? 'Remove from Liked' : 'Save to Liked Songs'}</span>
               </button>
+              {onCacheTrack && (
+                <button
+                  onClick={() => {
+                    onCacheTrack(track);
+                    setShowMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 text-emerald-300 hover:bg-neutral-700/80 hover:text-emerald-200 flex items-center gap-2 cursor-pointer"
+                >
+                  <Check className="w-3.5 h-3.5" />
+                  <span>{isCached ? 'Cached for Offline' : 'Cache for Offline'}</span>
+                </button>
+              )}
 
               {customPlaylists.length > 0 && onAddToPlaylist && (
                 <div className="border-t border-neutral-700/60 mt-1 pt-1">
@@ -198,6 +242,8 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
     prevProps.isCurrent === nextProps.isCurrent &&
     prevProps.isPlaying === nextProps.isPlaying &&
     prevProps.isLiked === nextProps.isLiked &&
+    prevProps.isCached === nextProps.isCached &&
+    prevProps.isOfflineDisabled === nextProps.isOfflineDisabled &&
     prevProps.index === nextProps.index &&
     (prevProps.customPlaylists?.length ?? 0) === (nextProps.customPlaylists?.length ?? 0)
   );
