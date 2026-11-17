@@ -1566,6 +1566,7 @@ export default function App() {
                 setOfflineNotice(`"${track.title}" requires an internet connection.`);
                 return;
               }
+              unlockAudioKeepAlive();
               setQueueIndex(idx);
               setCurrentTrack(track);
               setIsPlaying(true);

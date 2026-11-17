@@ -58,14 +58,11 @@ export function shouldPreserveIntentOnVisibilityPause(params: {
 }
 
 /**
- * Generates a valid 1-second silent 8kHz 16-bit mono PCM WAV Blob URL.
- * Used as a lightweight audio-focus anchor on mobile PWAs so the OS keeps the
- * MediaSession lock-screen controls & background audio alive.
+ * Generates a valid 1-second 8kHz 16-bit mono PCM WAV ArrayBuffer with an
+ * inaudible -90 dBFS alternating LSB signal (±1) so mobile browsers treat the
+ * audio stream as active media rather than idle silence.
  */
-export function createSilentWavBlobUrl(): string | null {
-  if (typeof Blob === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
-    return null;
-  }
+export function createKeepAliveWavBuffer(): ArrayBuffer {
   const sampleRate = 8000;
   const numSamples = sampleRate; // 1 second
   const dataSize = numSamples * 2;
@@ -92,19 +89,42 @@ export function createSilentWavBlobUrl(): string | null {
   writeStr(36, 'data');
   view.setUint32(40, dataSize, true);
 
+  for (let i = 0; i < numSamples; i++) {
+    view.setInt16(44 + i * 2, i % 2 === 0 ? 1 : -1, true);
+  }
+
+  return buffer;
+}
+
+/**
+ * Wraps the keep-alive WAV buffer in an Object URL for HTMLAudioElement playback.
+ */
+export function createSilentWavBlobUrl(): string | null {
+  if (typeof Blob === 'undefined' || typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return null;
+  }
+  const buffer = createKeepAliveWavBuffer();
   const blob = new Blob([buffer], { type: 'audio/wav' });
   return URL.createObjectURL(blob);
 }
 
 let keepAliveAudio: HTMLAudioElement | null = null;
 let keepAliveUrl: string | null = null;
+let primaryAudioElement: HTMLAudioElement | null = null;
+
+function ensureKeepAliveUrl(): string | null {
+  if (!keepAliveUrl) {
+    keepAliveUrl = createSilentWavBlobUrl();
+  }
+  return keepAliveUrl;
+}
 
 function getKeepAliveAudio(): HTMLAudioElement | null {
   if (typeof Audio === 'undefined') return null;
   if (!keepAliveAudio) {
-    keepAliveUrl = createSilentWavBlobUrl();
-    if (!keepAliveUrl) return null;
-    keepAliveAudio = new Audio(keepAliveUrl);
+    const url = ensureKeepAliveUrl();
+    if (!url) return null;
+    keepAliveAudio = new Audio(url);
     keepAliveAudio.loop = true;
     keepAliveAudio.volume = 0.01;
     keepAliveAudio.setAttribute('playsinline', 'true');
@@ -113,18 +133,44 @@ function getKeepAliveAudio(): HTMLAudioElement | null {
 }
 
 /**
- * Unlocks mobile audio session synchronously inside a user tap/click gesture.
+ * Registers the primary <audio> player element so it can be unlocked synchronously
+ * during a user tap/click before async stream resolution finishes.
+ */
+export function registerPrimaryAudioElement(el: HTMLAudioElement | null): void {
+  primaryAudioElement = el;
+}
+
+/**
+ * Unlocks mobile audio session synchronously inside a user tap/click gesture,
+ * priming both the keep-alive anchor and the primary <audio> element.
  */
 export function unlockAudioKeepAlive(): void {
   const audio = getKeepAliveAudio();
-  if (!audio) return;
-  try {
-    const p = audio.play();
-    if (p && typeof p.catch === 'function') {
-      p.catch(() => {});
+  if (audio) {
+    try {
+      const p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {});
+      }
+    } catch {
+      // ignore autoplay restriction if not triggered by gesture
     }
-  } catch {
-    // ignore autoplay restriction if not triggered by gesture
+  }
+
+  if (primaryAudioElement && !primaryAudioElement.getAttribute('src')) {
+    const url = ensureKeepAliveUrl();
+    if (url) {
+      try {
+        primaryAudioElement.src = url;
+        primaryAudioElement.volume = 0.01;
+        const p = primaryAudioElement.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(() => {});
+        }
+      } catch {
+        // ignore priming error
+      }
+    }
   }
 }
 

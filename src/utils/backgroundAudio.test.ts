@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildMediaMetadataInit,
+  createKeepAliveWavBuffer,
   shouldPreserveIntentOnVisibilityPause
 } from './backgroundAudio.ts';
 import { Track } from '../types/music';
@@ -62,4 +63,16 @@ test('shouldPreserveIntentOnVisibilityPause preserves play intent when page is h
     }),
     false
   );
+});
+
+test('createKeepAliveWavBuffer builds valid RIFF/WAVE PCM with inaudible non-zero dither', () => {
+  const buf = createKeepAliveWavBuffer();
+  assert.equal(buf.byteLength, 44 + 8000 * 2);
+  const view = new DataView(buf);
+  const riff = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+  const wave = String.fromCharCode(view.getUint8(8), view.getUint8(9), view.getUint8(10), view.getUint8(11));
+  assert.equal(riff, 'RIFF');
+  assert.equal(wave, 'WAVE');
+  assert.equal(view.getInt16(44, true), 1);
+  assert.equal(view.getInt16(46, true), -1);
 });

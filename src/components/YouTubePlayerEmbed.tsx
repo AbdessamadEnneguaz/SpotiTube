@@ -5,9 +5,11 @@ import { Track } from '../types/music';
 import { X, Minimize2, Maximize2 } from 'lucide-react';
 import {
   buildMediaMetadataInit,
+  registerPrimaryAudioElement,
   setAudioKeepAlivePlaying,
   shouldPreserveIntentOnVisibilityPause
 } from '../utils/backgroundAudio';
+import { resolveClientMirrorAudio } from '../utils/clientAudioResolver';
 import {
   showBackgroundNowPlayingNotification,
   clearBackgroundNowPlayingNotification
@@ -235,6 +237,14 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     }
   }, [currentTrack, isPlaying, engineMode]);
 
+  // Register primary <audio> element so user gestures unlock it before async resolution
+  useEffect(() => {
+    registerPrimaryAudioElement(nativeAudioRef.current);
+    return () => {
+      registerPrimaryAudioElement(null);
+    };
+  }, []);
+
   // Pre-warm YouTube IFrame API, track playback ticker, and mobile visibilitychange guard
   useEffect(() => {
     loadYouTubeIFrameAPI().catch(() => {});
@@ -428,25 +438,18 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
                   msSinceHidden: hiddenElapsedMs
                 })
               ) {
-                // Attempt background resume instead of letting visibilitychange force-pause UI state
-                setTimeout(() => {
-                  if (engineModeRef.current === 'youtube_iframe' && isPlayingRef.current) {
-                    try {
-                      playerRef.current?.playVideo();
-                    } catch {
-                      // ignore
+                // Attempt background resume across delayed mobile pause events without clearing user play intent
+                for (const delayMs of [120, 400, 900, 1600]) {
+                  setTimeout(() => {
+                    if (engineModeRef.current === 'youtube_iframe' && isPlayingRef.current) {
+                      try {
+                        playerRef.current?.playVideo();
+                      } catch {
+                        // ignore
+                      }
                     }
-                  }
-                }, 150);
-                setTimeout(() => {
-                  if (engineModeRef.current === 'youtube_iframe' && isPlayingRef.current) {
-                    try {
-                      playerRef.current?.playVideo();
-                    } catch {
-                      // ignore
-                    }
-                  }
-                }, 600);
+                  }, delayMs);
+                }
                 return;
               }
               onPlayerStateChangeRef.current('paused');
@@ -468,18 +471,16 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     });
   };
 
-  // Load new track: probe native background HTML5 audio first when video is hidden; fallback cleanly to YouTube IFrame
+  // Load new track: probe server audio + client IP mirror audio first when video is hidden; fallback cleanly to YouTube IFrame
   useEffect(() => {
     if (!currentTrack) return;
 
     const seq = ++activeProbeSeqRef.current;
 
-    // Pause both engines cleanly before switching tracks
-    if (nativeAudioRef.current) {
+    // Pause active engines before switching tracks while preserving gesture-unlocked primary <audio> element
+    if (engineModeRef.current === 'native_audio' && nativeAudioRef.current) {
       try {
         nativeAudioRef.current.pause();
-        nativeAudioRef.current.removeAttribute('src');
-        nativeAudioRef.current.load();
       } catch {
         // ignore
       }
@@ -499,39 +500,78 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
 
     let cancelled = false;
     (async () => {
+      let resolvedNativeUrl: string | null = null;
+
       try {
         const probeRes = await fetch(
           `/api/audio?v=${encodeURIComponent(currentTrack.youtubeId)}&probe=1`,
-          { signal: AbortSignal.timeout(3000) }
+          { signal: AbortSignal.timeout(2500) }
         );
         if (cancelled || seq !== activeProbeSeqRef.current) return;
 
         if (probeRes.ok) {
           const probeData = await probeRes.json();
-          if (
-            probeData?.available &&
-            nativeAudioRef.current &&
-            !isVisibleRef.current &&
-            currentTrackRef.current?.youtubeId === currentTrack.youtubeId
-          ) {
-            setActiveEngine('native_audio');
-            const audioEl = nativeAudioRef.current;
-            audioEl.src = `/api/audio?v=${encodeURIComponent(currentTrack.youtubeId)}`;
-            audioEl.volume = isMutedRef.current ? 0 : Math.min(1, Math.max(0, volumeRef.current / 100));
-            audioEl.muted = isMutedRef.current;
-            if (isPlayingRef.current) {
-              audioEl.play().catch(() => {
-                // If native <audio> playback blocked/fails, fall back cleanly to YT IFrame
-                if (currentTrackRef.current?.youtubeId === currentTrack.youtubeId) {
-                  startOrLoadYouTubeIFrame(currentTrack, 0);
-                }
-              });
-            }
-            return;
+          if (probeData?.available) {
+            resolvedNativeUrl = `/api/audio?v=${encodeURIComponent(currentTrack.youtubeId)}`;
           }
         }
       } catch {
-        // probe failed or timed out; fall back to YouTube IFrame
+        // backend probe unavailable; proceed to client-side mirror resolution
+      }
+
+      if (!resolvedNativeUrl && !cancelled && seq === activeProbeSeqRef.current) {
+        const audioEl = nativeAudioRef.current;
+        const canPlay = audioEl
+          ? (mime: string) => {
+              try {
+                return Boolean(audioEl.canPlayType(mime));
+              } catch {
+                return true;
+              }
+            }
+          : undefined;
+        try {
+          const mirror = await resolveClientMirrorAudio(currentTrack.youtubeId, canPlay);
+          if (mirror?.url) {
+            resolvedNativeUrl = mirror.url;
+          }
+        } catch {
+          // mirror resolution failed; fall back to YT IFrame
+        }
+      }
+
+      if (cancelled || seq !== activeProbeSeqRef.current) return;
+
+      if (
+        resolvedNativeUrl &&
+        nativeAudioRef.current &&
+        !isVisibleRef.current &&
+        currentTrackRef.current?.youtubeId === currentTrack.youtubeId
+      ) {
+        setActiveEngine('native_audio');
+        const audioEl = nativeAudioRef.current;
+        audioEl.src = resolvedNativeUrl;
+        audioEl.volume = isMutedRef.current ? 0 : Math.min(1, Math.max(0, volumeRef.current / 100));
+        audioEl.muted = isMutedRef.current;
+        if (isPlayingRef.current) {
+          audioEl.play().catch(() => {
+            if (currentTrackRef.current?.youtubeId === currentTrack.youtubeId) {
+              startOrLoadYouTubeIFrame(currentTrack, 0);
+            }
+          });
+        }
+        return;
+      }
+
+      // Neither backend nor mirror returned an HTML5 audio stream: release primed keep-alive src and use YT IFrame
+      if (nativeAudioRef.current && engineModeRef.current !== 'native_audio') {
+        try {
+          nativeAudioRef.current.pause();
+          nativeAudioRef.current.removeAttribute('src');
+          nativeAudioRef.current.load();
+        } catch {
+          // ignore
+        }
       }
 
       if (!cancelled && seq === activeProbeSeqRef.current) {
