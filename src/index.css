@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Allow text selection & soft keyboard input inside form controls even when parent uses select-none */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* Smooth view transition animations for main content area */
 @keyframes viewFadeSlide {
   0% {

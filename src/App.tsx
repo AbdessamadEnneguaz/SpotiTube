@@ -649,6 +649,13 @@ export default function App() {
           onNavigate={(view) => {
             setCurrentView(view);
             setSelectedPlaylistId(null);
+            if (view === 'search') {
+              setTimeout(() => {
+                const input = document.getElementById('spotitube-search-input') as HTMLInputElement | null;
+                input?.focus();
+                (window as unknown as { SpotiTubeAndroid?: { showKeyboard?: () => void } }).SpotiTubeAndroid?.showKeyboard?.();
+              }, 60);
+            }
           }}
           onSelectPlaylist={(pId) => {
             setSelectedPlaylistId(pId);
@@ -1685,6 +1692,13 @@ export default function App() {
         onNavigate={(view) => {
           setCurrentView(view);
           setSelectedPlaylistId(null);
+          if (view === 'search') {
+            setTimeout(() => {
+              const input = document.getElementById('spotitube-search-input') as HTMLInputElement | null;
+              input?.focus();
+              (window as unknown as { SpotiTubeAndroid?: { showKeyboard?: () => void } }).SpotiTubeAndroid?.showKeyboard?.();
+            }, 60);
+          }
         }}
         onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
       />

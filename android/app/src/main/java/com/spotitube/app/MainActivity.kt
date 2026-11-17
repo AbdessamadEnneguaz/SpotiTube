@@ -2,11 +2,14 @@ package com.spotitube.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
+import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -45,6 +48,17 @@ class MainActivity : AppCompatActivity() {
 
         webView = BackgroundWebView(this).apply {
             setBackgroundColor(0xFF121212.toInt())
+            isFocusable = true
+            isFocusableInTouchMode = true
+            setOnTouchListener { v, event ->
+                if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_UP) {
+                    if (!v.hasFocus()) {
+                        v.requestFocus()
+                        v.requestFocusFromTouch()
+                    }
+                }
+                false
+            }
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
@@ -120,6 +134,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setContentView(webView)
+        webView.requestFocus()
         val remoteUrl = BuildConfig.APP_URL.takeIf { it.startsWith("https://") }
         if (remoteUrl == null || remoteUrl == BUNDLED_APP_URL) {
             loadedBundledFallback = true
@@ -226,6 +241,16 @@ class MainActivity : AppCompatActivity() {
                 } else {
                     startService(serviceIntent)
                 }
+            }
+        }
+
+        @JavascriptInterface
+        fun showKeyboard() {
+            runOnUiThread {
+                webView.requestFocus()
+                webView.requestFocusFromTouch()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
             }
         }
     }

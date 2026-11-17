@@ -13,11 +13,17 @@ import android.webkit.WebView
 class BackgroundWebView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
-    defStyleAttr: Int = 0
+    defStyleAttr: Int = android.R.attr.webViewStyle
 ) : WebView(context, attrs, defStyleAttr) {
 
     @Volatile
     var keepAliveInBackground: Boolean = false
+
+    init {
+        isFocusable = true
+        isFocusableInTouchMode = true
+        descendantFocusability = FOCUS_AFTER_DESCENDANTS
+    }
 
     override fun onWindowVisibilityChanged(visibility: Int) {
         if (keepAliveInBackground && visibility != View.VISIBLE) {

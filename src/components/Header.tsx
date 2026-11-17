@@ -37,16 +37,29 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 }) => {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const searchWrapperRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: PointerEvent) => {
       if (searchWrapperRef.current && !searchWrapperRef.current.contains(e.target as Node)) {
         setIsHistoryOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, []);
+
+  const triggerMobileKeyboard = () => {
+    try {
+      searchInputRef.current?.focus();
+      const bridge = (window as unknown as {
+        SpotiTubeAndroid?: { showKeyboard?: () => void };
+      }).SpotiTubeAndroid;
+      bridge?.showKeyboard?.();
+    } catch {
+      // ignore outside native wrapper
+    }
+  };
 
   const genres = [
     { id: 'all', label: 'All Music' },
@@ -134,14 +147,32 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 
           {/* Search Bar + History Dropdown */}
           <div ref={searchWrapperRef} className="relative flex-1">
-            <div className="relative">
+            <div className="relative" onClick={triggerMobileKeyboard}>
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-400">
                 <Search className="w-4 h-4" />
               </div>
               <input
-                type="text"
+                ref={searchInputRef}
+                id="spotitube-search-input"
+                type="search"
+                inputMode="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
                 value={searchQuery}
-                onFocus={() => setIsHistoryOpen(true)}
+                onFocus={() => {
+                  setIsHistoryOpen(true);
+                  try {
+                    const bridge = (window as unknown as {
+                      SpotiTubeAndroid?: { showKeyboard?: () => void };
+                    }).SpotiTubeAndroid;
+                    bridge?.showKeyboard?.();
+                  } catch {
+                    // ignore
+                  }
+                }}
                 onChange={(e) => {
                   onSearchChange(e.target.value);
                   setIsHistoryOpen(true);
@@ -160,14 +191,16 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                     : 'Search songs, artists, Chaabi, Rai, Rap...'
                 }
                 aria-label="Search music"
-                className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-sm pl-9 pr-9 py-2 rounded-full border border-transparent focus:border-neutral-500 focus:outline-none transition-all placeholder:text-neutral-500 shadow-inner"
+                className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-sm pl-9 pr-9 py-2 rounded-full border border-transparent focus:border-neutral-500 focus:outline-none transition-all placeholder:text-neutral-500 shadow-inner select-text [&::-webkit-search-cancel-button]:hidden"
               />
               {searchQuery && (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     onSearchChange('');
                     setIsHistoryOpen(true);
+                    triggerMobileKeyboard();
                   }}
                   aria-label="Clear search query"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-white cursor-pointer"
