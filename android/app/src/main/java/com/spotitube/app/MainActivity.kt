@@ -22,6 +22,8 @@ import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
 import java.net.HttpURLConnection
 import java.net.URL
@@ -51,11 +53,9 @@ class MainActivity : AppCompatActivity() {
             isFocusable = true
             isFocusableInTouchMode = true
             setOnTouchListener { v, event ->
-                if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_UP) {
-                    if (!v.hasFocus()) {
-                        v.requestFocus()
-                        v.requestFocusFromTouch()
-                    }
+                if (event.action == MotionEvent.ACTION_DOWN && !v.hasFocus()) {
+                    v.requestFocus()
+                    v.requestFocusFromTouch()
                 }
                 false
             }
@@ -112,6 +112,7 @@ class MainActivity : AppCompatActivity() {
 
                 override fun onPageFinished(view: WebView?, url: String?) {
                     super.onPageFinished(view, url)
+                    view?.requestFocus()
                     if (!loadedBundledFallback && url != null && url != BUNDLED_APP_URL) {
                         if (
                             url.contains("__cookie_check") ||
@@ -249,8 +250,13 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 webView.requestFocus()
                 webView.requestFocusFromTouch()
-                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                imm?.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
+                val showNow = {
+                    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                    imm?.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
+                    WindowCompat.getInsetsController(window, webView)?.show(WindowInsetsCompat.Type.ime())
+                }
+                showNow()
+                webView.postDelayed({ showNow() }, 90)
             }
         }
     }

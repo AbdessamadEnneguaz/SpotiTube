@@ -169,7 +169,10 @@ export default function App() {
   const [isBgPermissionOpen, setIsBgPermissionOpen] = useState<boolean>(() =>
     shouldAutoPromptPermissionsOnEntry({
       alreadyPrompted: loadPermissionsPrompted(),
-      notificationPermission: getNotificationPermissionState()
+      notificationPermission: getNotificationPermissionState(),
+      isNativeAndroid:
+        typeof window !== 'undefined' &&
+        Boolean((window as unknown as { SpotiTubeAndroid?: unknown }).SpotiTubeAndroid)
     })
   );
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
@@ -636,6 +639,49 @@ export default function App() {
     }
   }, [duration]);
 
+  const searchFocusTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchFocusTimerRef.current !== null) {
+        window.clearTimeout(searchFocusTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleNavigate = useCallback((view: 'home' | 'search' | 'library') => {
+    setCurrentView(view);
+    setSelectedPlaylistId(null);
+
+    if (searchFocusTimerRef.current !== null) {
+      window.clearTimeout(searchFocusTimerRef.current);
+      searchFocusTimerRef.current = null;
+    }
+
+    if (view === 'search') {
+      const focusAndShowKeyboard = () => {
+        const input = document.getElementById('spotitube-search-input') as HTMLInputElement | null;
+        if (input) {
+          input.focus({ preventScroll: true });
+        }
+        try {
+          (window as unknown as {
+            SpotiTubeAndroid?: { showKeyboard?: () => void };
+          }).SpotiTubeAndroid?.showKeyboard?.();
+        } catch {
+          // ignore outside native wrapper
+        }
+      };
+
+      // Focus synchronously inside user gesture, then reinforce after view transition
+      focusAndShowKeyboard();
+      searchFocusTimerRef.current = window.setTimeout(() => {
+        focusAndShowKeyboard();
+        searchFocusTimerRef.current = null;
+      }, 140);
+    }
+  }, []);
+
   return (
     <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-black text-white font-sans antialiased">
       {/* Top Application Body (Sidebar + Main Content + Side Panels) */}
@@ -646,17 +692,7 @@ export default function App() {
           selectedPlaylistId={selectedPlaylistId}
           playlists={allPlaylists}
           likedCount={likedTrackIds.size}
-          onNavigate={(view) => {
-            setCurrentView(view);
-            setSelectedPlaylistId(null);
-            if (view === 'search') {
-              setTimeout(() => {
-                const input = document.getElementById('spotitube-search-input') as HTMLInputElement | null;
-                input?.focus();
-                (window as unknown as { SpotiTubeAndroid?: { showKeyboard?: () => void } }).SpotiTubeAndroid?.showKeyboard?.();
-              }, 60);
-            }
-          }}
+          onNavigate={handleNavigate}
           onSelectPlaylist={(pId) => {
             setSelectedPlaylistId(pId);
             setCurrentView('playlist');
@@ -1689,17 +1725,7 @@ export default function App() {
       {/* Mobile Bottom Navigation Bar */}
       <MobileNav
         currentView={currentView}
-        onNavigate={(view) => {
-          setCurrentView(view);
-          setSelectedPlaylistId(null);
-          if (view === 'search') {
-            setTimeout(() => {
-              const input = document.getElementById('spotitube-search-input') as HTMLInputElement | null;
-              input?.focus();
-              (window as unknown as { SpotiTubeAndroid?: { showKeyboard?: () => void } }).SpotiTubeAndroid?.showKeyboard?.();
-            }, 60);
-          }
-        }}
+        onNavigate={handleNavigate}
         onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
       />
 

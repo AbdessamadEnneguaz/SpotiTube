@@ -22,7 +22,7 @@ class BackgroundWebView @JvmOverloads constructor(
     init {
         isFocusable = true
         isFocusableInTouchMode = true
-        descendantFocusability = FOCUS_AFTER_DESCENDANTS
+        descendantFocusability = FOCUS_BEFORE_DESCENDANTS
     }
 
     override fun onWindowVisibilityChanged(visibility: Int) {

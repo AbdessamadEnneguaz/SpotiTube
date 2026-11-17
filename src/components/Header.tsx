@@ -51,7 +51,10 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 
   const triggerMobileKeyboard = () => {
     try {
-      searchInputRef.current?.focus();
+      const input = searchInputRef.current;
+      if (input && document.activeElement !== input) {
+        input.focus({ preventScroll: true });
+      }
       const bridge = (window as unknown as {
         SpotiTubeAndroid?: { showKeyboard?: () => void };
       }).SpotiTubeAndroid;
@@ -147,14 +150,18 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 
           {/* Search Bar + History Dropdown */}
           <div ref={searchWrapperRef} className="relative flex-1">
-            <div className="relative" onClick={triggerMobileKeyboard}>
+            <div
+              className="relative"
+              onClick={triggerMobileKeyboard}
+              onTouchEnd={triggerMobileKeyboard}
+            >
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-400">
                 <Search className="w-4 h-4" />
               </div>
               <input
                 ref={searchInputRef}
                 id="spotitube-search-input"
-                type="search"
+                type="text"
                 inputMode="search"
                 enterKeyHint="search"
                 autoComplete="off"
@@ -191,7 +198,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                     : 'Search songs, artists, Chaabi, Rai, Rap...'
                 }
                 aria-label="Search music"
-                className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-sm pl-9 pr-9 py-2 rounded-full border border-transparent focus:border-neutral-500 focus:outline-none transition-all placeholder:text-neutral-500 shadow-inner select-text [&::-webkit-search-cancel-button]:hidden"
+                className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-sm pl-9 pr-9 py-2 rounded-full border border-neutral-700/70 focus:border-[#1db954] focus:outline-none transition-all placeholder:text-neutral-400 shadow-inner select-text"
               />
               {searchQuery && (
                 <button

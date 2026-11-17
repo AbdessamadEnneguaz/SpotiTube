@@ -58,7 +58,9 @@ export function markAppPermissionsPrompted(): void {
 export function shouldAutoPromptPermissionsOnEntry(params: {
   alreadyPrompted: boolean;
   notificationPermission: NotificationPermStatus;
+  isNativeAndroid?: boolean;
 }): boolean {
+  if (params.isNativeAndroid) return false;
   if (params.alreadyPrompted) return false;
   return params.notificationPermission !== 'granted';
 }
