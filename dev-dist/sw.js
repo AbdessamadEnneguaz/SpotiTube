@@ -78,12 +78,12 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.el687bujdlg"
+    "revision": "0.bfioo5dios"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
     allowlist: [/^\/$/],
-    denylist: [/^\/api\//]
+    denylist: [/^\/api\//, /\.apk$/i]
   }));
   workbox.registerRoute(/\/api\/search/i, new workbox.CacheFirst({
     "cacheName": "track-search-metadata-v1",

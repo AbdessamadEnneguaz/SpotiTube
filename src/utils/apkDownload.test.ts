@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isSafeApkDownloadUrl, resolveApkDownloadConfig } from './apkDownload';
+import {
+  isApkHeadResponseValid,
+  isSafeApkDownloadUrl,
+  resolveApkDownloadConfig
+} from './apkDownload';
 
 test('isSafeApkDownloadUrl accepts valid https or local .apk paths and rejects unsafe URLs', () => {
   assert.equal(isSafeApkDownloadUrl('https://github.com/user/spotitube/releases/download/v1/SpotiTube.apk'), true);
@@ -32,4 +36,31 @@ test('resolveApkDownloadConfig prioritizes valid configuredUrl, then localApkExi
   });
   assert.equal(unavailable.available, false);
   assert.equal(unavailable.downloadUrl, null);
+});
+
+test('isApkHeadResponseValid distinguishes real APK binaries from HTML fallbacks', () => {
+  assert.equal(
+    isApkHeadResponseValid({
+      ok: true,
+      contentType: 'application/vnd.android.package-archive',
+      contentLength: '3314475'
+    }),
+    true
+  );
+  assert.equal(
+    isApkHeadResponseValid({
+      ok: true,
+      contentType: 'text/html; charset=utf-8',
+      contentLength: '4500'
+    }),
+    false
+  );
+  assert.equal(
+    isApkHeadResponseValid({
+      ok: false,
+      contentType: 'application/vnd.android.package-archive',
+      contentLength: '3314475'
+    }),
+    false
+  );
 });

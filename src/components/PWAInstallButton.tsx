@@ -2,11 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, Share, X, Smartphone, Monitor, CheckCircle2, Wrench } from 'lucide-react';
 import { usePWAInstall } from '../hooks/usePWAInstall';
-import { ApkInfoResponse, resolveApkDownloadConfig } from '../utils/apkDownload';
+import {
+  ApkInfoResponse,
+  isApkHeadResponseValid,
+  resolveApkDownloadConfig
+} from '../utils/apkDownload';
 
 export const PWAInstallButton: React.FC = React.memo(() => {
   const { isInstallable, isInstalled, isIOS, install } = usePWAInstall();
   const [showGuide, setShowGuide] = useState(false);
+  const [isCheckingApk, setIsCheckingApk] = useState(true);
   const [apkInfo, setApkInfo] = useState<ApkInfoResponse>(() =>
     resolveApkDownloadConfig({
       configuredUrl: import.meta.env.VITE_ANDROID_APK_URL as string | undefined,
@@ -14,23 +19,53 @@ export const PWAInstallButton: React.FC = React.memo(() => {
     })
   );
 
+  // Check APK availability eagerly on mount (and fallback to HEAD /SpotiTube.apk for static hosts)
   useEffect(() => {
-    if (!showGuide) return;
     let cancelled = false;
-    fetch('/api/apk-info', { headers: { Accept: 'application/json' } })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: ApkInfoResponse | null) => {
-        if (!cancelled && data && typeof data.available === 'boolean') {
-          setApkInfo(data);
+    (async () => {
+      try {
+        const res = await fetch('/api/apk-info', { headers: { Accept: 'application/json' } });
+        if (res.ok) {
+          const data: ApkInfoResponse = await res.json();
+          if (!cancelled && data && typeof data.available === 'boolean') {
+            setApkInfo(data);
+            setIsCheckingApk(false);
+            return;
+          }
         }
-      })
-      .catch(() => {
-        // Keep env-resolved fallback on static hosts
-      });
+      } catch {
+        // Fallback to static file HEAD check
+      }
+
+      try {
+        const headRes = await fetch('/SpotiTube.apk', { method: 'HEAD' });
+        if (
+          !cancelled &&
+          isApkHeadResponseValid({
+            ok: headRes.ok,
+            contentType: headRes.headers.get('content-type'),
+            contentLength: headRes.headers.get('content-length')
+          })
+        ) {
+          setApkInfo({
+            available: true,
+            downloadUrl: '/SpotiTube.apk',
+            filename: 'SpotiTube.apk'
+          });
+        }
+      } catch {
+        // Keep current config
+      } finally {
+        if (!cancelled) {
+          setIsCheckingApk(false);
+        }
+      }
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [showGuide]);
+  }, []);
 
   const isRunningInsideAndroidApk =
     typeof window !== 'undefined' &&
@@ -90,15 +125,24 @@ export const PWAInstallButton: React.FC = React.memo(() => {
                   Native Android package with a Media Foreground Service so music keeps playing even when you leave the app or turn off the screen.
                 </p>
 
-                {apkInfo.available && apkInfo.downloadUrl ? (
-                  <a
-                    href={apkInfo.downloadUrl}
-                    download={apkInfo.filename}
-                    className="mt-1 flex items-center justify-center gap-2 w-full rounded-full bg-[#1db954] hover:bg-[#1ed760] py-2.5 px-4 text-xs font-extrabold text-black transition-colors shadow-lg"
-                  >
-                    <Download className="w-4 h-4" />
-                    <span>Download {apkInfo.filename}</span>
-                  </a>
+                {isCheckingApk && !apkInfo.available ? (
+                  <div className="py-2.5 text-center text-xs text-neutral-400">
+                    Checking APK package...
+                  </div>
+                ) : apkInfo.available && apkInfo.downloadUrl ? (
+                  <div className="space-y-2 pt-0.5">
+                    <a
+                      href={apkInfo.downloadUrl}
+                      download={apkInfo.filename}
+                      className="flex items-center justify-center gap-2 w-full rounded-full bg-[#1db954] hover:bg-[#1ed760] py-2.5 px-4 text-xs font-extrabold text-black transition-colors shadow-lg"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Download {apkInfo.filename}</span>
+                    </a>
+                    <p className="text-[11px] text-neutral-400 leading-relaxed text-center">
+                      After downloading, open <strong className="text-neutral-200">{apkInfo.filename}</strong> and tap <strong className="text-neutral-200">Install</strong> (allow &ldquo;Install unknown apps&rdquo; if prompted).
+                    </p>
+                  </div>
                 ) : (
                   <div className="rounded-lg bg-neutral-800/80 border border-neutral-700 p-3 space-y-1.5">
                     <div className="flex items-center gap-1.5 text-amber-300 text-xs font-semibold">

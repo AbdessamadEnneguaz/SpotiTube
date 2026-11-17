@@ -60,3 +60,19 @@ export function resolveApkDownloadConfig(params: {
     filename: DEFAULT_APK_FILENAME
   };
 }
+
+/**
+ * Verifies a HEAD /SpotiTube.apk response returned a real binary package rather than HTML SPA fallback.
+ */
+export function isApkHeadResponseValid(params: {
+  ok: boolean;
+  contentType: string | null;
+  contentLength: string | null;
+}): boolean {
+  if (!params.ok) return false;
+  const ct = (params.contentType || '').toLowerCase();
+  if (ct.includes('text/html')) return false;
+  const len = params.contentLength ? Number.parseInt(params.contentLength, 10) : 0;
+  if (Number.isFinite(len) && len > 0 && len <= 1024) return false;
+  return ct.includes('android.package-archive') || ct.includes('octet-stream') || len > 1024;
+}
