@@ -1,7 +1,9 @@
 import express, { Request, Response, NextFunction } from 'express';
+import fs from 'fs';
 import http from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { resolveApkDownloadConfig } from './src/utils/apkDownload.js';
 import {
   isSearchRateLimited,
   sanitizeSearchQuery,
@@ -170,6 +172,47 @@ app.get('/api/audio', async (req: Request, res: Response) => {
     invalidateAudioStreamCache(videoId);
     return res.status(502).json({ error: 'Audio stream error.' });
   }
+});
+
+// Android APK availability metadata & direct download MIME headers
+app.get('/api/apk-info', (_req: Request, res: Response) => {
+  const localPaths = [
+    path.resolve(__dirname, 'public', 'SpotiTube.apk'),
+    path.resolve(__dirname, 'dist', 'SpotiTube.apk')
+  ];
+  const localExists = localPaths.some((p) => {
+    try {
+      return fs.existsSync(p) && fs.statSync(p).size > 1024;
+    } catch {
+      return false;
+    }
+  });
+  const config = resolveApkDownloadConfig({
+    configuredUrl: process.env.ANDROID_APK_URL || process.env.VITE_ANDROID_APK_URL,
+    localApkExists: localExists
+  });
+  res.setHeader('Cache-Control', 'no-store');
+  return res.json(config);
+});
+
+app.get('/SpotiTube.apk', (_req: Request, res: Response) => {
+  const candidates = [
+    path.resolve(__dirname, 'public', 'SpotiTube.apk'),
+    path.resolve(__dirname, 'dist', 'SpotiTube.apk')
+  ];
+  const found = candidates.find((p) => {
+    try {
+      return fs.existsSync(p) && fs.statSync(p).size > 1024;
+    } catch {
+      return false;
+    }
+  });
+  if (!found) {
+    return res.status(404).json({ error: 'APK binary not yet built or uploaded.' });
+  }
+  res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+  res.setHeader('Content-Disposition', 'attachment; filename="SpotiTube.apk"');
+  return res.sendFile(found);
 });
 
 // Health check endpoint for monitoring & uptime checks

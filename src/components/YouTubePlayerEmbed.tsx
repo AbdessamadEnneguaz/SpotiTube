@@ -235,6 +235,19 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     } else if (!isPlaying || !currentTrack) {
       void clearBackgroundNowPlayingNotification();
     }
+
+    try {
+      const bridge = (window as unknown as {
+        SpotiTubeAndroid?: { setPlayingState?: (playing: boolean, title: string, artist: string) => void };
+      }).SpotiTubeAndroid;
+      bridge?.setPlayingState?.(
+        Boolean(currentTrack && isPlaying),
+        currentTrack?.title || 'SpotiTube',
+        currentTrack?.artist || 'Music'
+      );
+    } catch {
+      // ignore outside native Android wrapper
+    }
   }, [currentTrack, isPlaying, engineMode]);
 
   // Register primary <audio> element so user gestures unlock it before async resolution
