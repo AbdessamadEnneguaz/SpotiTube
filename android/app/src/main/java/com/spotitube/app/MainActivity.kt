@@ -8,7 +8,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -52,13 +51,6 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(0xFF121212.toInt())
             isFocusable = true
             isFocusableInTouchMode = true
-            setOnTouchListener { v, event ->
-                if (event.action == MotionEvent.ACTION_DOWN && !v.hasFocus()) {
-                    v.requestFocus()
-                    v.requestFocusFromTouch()
-                }
-                false
-            }
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.databaseEnabled = true
@@ -248,15 +240,12 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun showKeyboard() {
             runOnUiThread {
-                webView.requestFocus()
-                webView.requestFocusFromTouch()
-                val showNow = {
-                    val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                    imm?.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
-                    WindowCompat.getInsetsController(window, webView)?.show(WindowInsetsCompat.Type.ime())
+                if (!webView.hasFocus()) {
+                    webView.requestFocus()
                 }
-                showNow()
-                webView.postDelayed({ showNow() }, 90)
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                imm?.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
+                WindowCompat.getInsetsController(window, webView)?.show(WindowInsetsCompat.Type.ime())
             }
         }
     }

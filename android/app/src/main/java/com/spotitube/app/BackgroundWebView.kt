@@ -1,7 +1,6 @@
 package com.spotitube.app
 
 import android.content.Context
-import android.util.AttributeSet
 import android.view.View
 import android.webkit.WebView
 
@@ -10,11 +9,7 @@ import android.webkit.WebView
  * document.hidden = true to YouTube IFrame / Web Audio when the app moves
  * to the background during active music playback.
  */
-class BackgroundWebView @JvmOverloads constructor(
-    context: Context,
-    attrs: AttributeSet? = null,
-    defStyleAttr: Int = android.R.attr.webViewStyle
-) : WebView(context, attrs, defStyleAttr) {
+class BackgroundWebView(context: Context) : WebView(context) {
 
     @Volatile
     var keepAliveInBackground: Boolean = false
@@ -22,7 +17,6 @@ class BackgroundWebView @JvmOverloads constructor(
     init {
         isFocusable = true
         isFocusableInTouchMode = true
-        descendantFocusability = FOCUS_BEFORE_DESCENDANTS
     }
 
     override fun onWindowVisibilityChanged(visibility: Int) {

@@ -49,16 +49,14 @@ export const Header: React.FC<HeaderProps> = React.memo(({
     return () => document.removeEventListener('pointerdown', handleClickOutside);
   }, []);
 
-  const triggerMobileKeyboard = () => {
+  const handleWrapperClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const input = searchInputRef.current;
+    if (!input || e.target === input) return;
+    input.focus({ preventScroll: true });
     try {
-      const input = searchInputRef.current;
-      if (input && document.activeElement !== input) {
-        input.focus({ preventScroll: true });
-      }
-      const bridge = (window as unknown as {
+      (window as unknown as {
         SpotiTubeAndroid?: { showKeyboard?: () => void };
-      }).SpotiTubeAndroid;
-      bridge?.showKeyboard?.();
+      }).SpotiTubeAndroid?.showKeyboard?.();
     } catch {
       // ignore outside native wrapper
     }
@@ -152,8 +150,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
           <div ref={searchWrapperRef} className="relative flex-1">
             <div
               className="relative"
-              onClick={triggerMobileKeyboard}
-              onTouchEnd={triggerMobileKeyboard}
+              onClick={handleWrapperClick}
             >
               <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-400">
                 <Search className="w-4 h-4" />
@@ -169,17 +166,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                 autoCapitalize="none"
                 spellCheck={false}
                 value={searchQuery}
-                onFocus={() => {
-                  setIsHistoryOpen(true);
-                  try {
-                    const bridge = (window as unknown as {
-                      SpotiTubeAndroid?: { showKeyboard?: () => void };
-                    }).SpotiTubeAndroid;
-                    bridge?.showKeyboard?.();
-                  } catch {
-                    // ignore
-                  }
-                }}
+                onFocus={() => setIsHistoryOpen(true)}
                 onChange={(e) => {
                   onSearchChange(e.target.value);
                   setIsHistoryOpen(true);
@@ -207,7 +194,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                     e.stopPropagation();
                     onSearchChange('');
                     setIsHistoryOpen(true);
-                    triggerMobileKeyboard();
+                    searchInputRef.current?.focus({ preventScroll: true });
                   }}
                   aria-label="Clear search query"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-white cursor-pointer"
