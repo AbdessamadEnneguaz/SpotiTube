@@ -1,9 +1,10 @@
 import React from 'react';
-import { Compass, Search, Library, PlusSquare } from 'lucide-react';
+import { Home, Search, Library, PlusSquare } from 'lucide-react';
+import { AppView } from '../types/music';
 
 interface MobileNavProps {
-  currentView: 'home' | 'search' | 'library' | 'playlist';
-  onNavigate: (view: 'home' | 'search' | 'library') => void;
+  currentView: AppView;
+  onNavigate: (view: AppView) => void;
   onOpenCreatePlaylist: () => void;
 }
 
@@ -12,6 +13,13 @@ export const MobileNav: React.FC<MobileNavProps> = React.memo(({
   onNavigate,
   onOpenCreatePlaylist
 }) => {
+  const isHomeTab =
+    currentView === 'home' ||
+    currentView === 'countries' ||
+    currentView === 'mixes' ||
+    currentView === 'charts' ||
+    currentView === 'recent';
+
   return (
     <nav
       aria-label="Mobile Navigation"
@@ -21,11 +29,11 @@ export const MobileNav: React.FC<MobileNavProps> = React.memo(({
         type="button"
         onClick={() => onNavigate('home')}
         className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] rounded-xl transition-colors cursor-pointer ${
-          currentView === 'home' ? 'text-[#DFCCB0] font-semibold' : 'text-[#9E9384] hover:text-[#E4DDD2]'
+          isHomeTab ? 'text-[#DFCCB0] font-semibold' : 'text-[#9E9384] hover:text-[#E4DDD2]'
         }`}
       >
-        <Compass className="w-5 h-5" />
-        <span className="text-[10px] leading-tight whitespace-nowrap">Discover</span>
+        <Home className="w-5 h-5" />
+        <span className="text-[10px] leading-tight whitespace-nowrap">Home</span>
       </button>
 
       <button

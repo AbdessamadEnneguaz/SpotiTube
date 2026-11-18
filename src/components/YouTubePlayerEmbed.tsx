@@ -173,6 +173,42 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     });
   }, [currentTrack]);
 
+  // Listen to native Android MediaStyle notification buttons (Play / Pause / Next / Previous / Stop)
+  useEffect(() => {
+    const win = window as unknown as {
+      __spotitubeMediaControl?: (cmd: string) => void;
+    };
+    win.__spotitubeMediaControl = (cmd: string) => {
+      if (cmd === 'play') {
+        if (!isPlayingRef.current) {
+          onPlayPauseRef.current?.();
+        }
+        if (engineModeRef.current === 'native_audio' && nativeAudioRef.current) {
+          nativeAudioRef.current.play().catch(() => {});
+        } else if (playerRef.current) {
+          try {
+            playerRef.current.playVideo();
+          } catch {
+            // ignore
+          }
+        }
+      } else if (cmd === 'pause' || cmd === 'stop') {
+        if (isPlayingRef.current) {
+          onPlayPauseRef.current?.();
+        }
+      } else if (cmd === 'toggle') {
+        onPlayPauseRef.current?.();
+      } else if (cmd === 'next') {
+        onNextRef.current?.();
+      } else if (cmd === 'previous') {
+        onPreviousRef.current?.();
+      }
+    };
+    return () => {
+      delete win.__spotitubeMediaControl;
+    };
+  }, []);
+
   // Sync MediaSession playbackState, silent WAV + Web Audio keep-alive, and background notification
   useEffect(() => {
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
@@ -227,13 +263,46 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
 
     try {
       const bridge = (window as unknown as {
-        SpotiTubeAndroid?: { setPlayingState?: (playing: boolean, title: string, artist: string) => void };
+        SpotiTubeAndroid?: {
+          updateMediaState?: (
+            hasTrack: boolean,
+            playing: boolean,
+            title: string,
+            artist: string,
+            artworkUrl: string,
+            durationMs: number,
+            positionMs: number
+          ) => void;
+          setPlayingState?: (playing: boolean, title: string, artist: string) => void;
+        };
       }).SpotiTubeAndroid;
-      bridge?.setPlayingState?.(
-        Boolean(currentTrack && isPlaying),
-        currentTrack?.title || 'SpotiTube',
-        currentTrack?.artist || 'Music'
-      );
+
+      const curPosSec =
+        engineModeRef.current === 'native_audio' && nativeAudioRef.current
+          ? nativeAudioRef.current.currentTime || 0
+          : playerRef.current?.getCurrentTime?.() || 0;
+      const trackDurSec = currentTrack?.durationSeconds || 0;
+      const artworkUrl =
+        currentTrack?.thumbnail ||
+        (currentTrack?.youtubeId ? `https://i.ytimg.com/vi/${currentTrack.youtubeId}/hqdefault.jpg` : '');
+
+      if (bridge?.updateMediaState) {
+        bridge.updateMediaState(
+          Boolean(currentTrack),
+          Boolean(currentTrack && isPlaying),
+          currentTrack?.title || 'SpotiTube',
+          currentTrack?.artist || 'Global Soundstage',
+          artworkUrl,
+          Math.max(0, Math.round(trackDurSec * 1000)),
+          Math.max(0, Math.round(curPosSec * 1000))
+        );
+      } else {
+        bridge?.setPlayingState?.(
+          Boolean(currentTrack && isPlaying),
+          currentTrack?.title || 'SpotiTube',
+          currentTrack?.artist || 'Global Soundstage'
+        );
+      }
     } catch {
       // ignore outside native Android wrapper
     }

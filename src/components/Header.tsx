@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChevronLeft, Search, X, Moon, Disc3, Shield, History, ArrowUpRight } from 'lucide-react';
+import { AppView } from '../types/music';
 import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
-  currentView: string;
+  currentView: AppView;
+  canGoBack: boolean;
   searchQuery: string;
   recentSearches: string[];
   isOfflineMode?: boolean;
@@ -12,8 +14,6 @@ interface HeaderProps {
   onSelectRecentSearch?: (q: string) => void;
   onRemoveRecentSearch?: (q: string) => void;
   onClearRecentSearches?: () => void;
-  selectedGenre: string;
-  onGenreSelect: (genre: string) => void;
   onOpenLegal: (tab?: 'privacy' | 'terms' | 'dmca' | 'cookies') => void;
   onOpenSleepTimer: () => void;
   onBack: () => void;
@@ -21,6 +21,7 @@ interface HeaderProps {
 
 export const Header: React.FC<HeaderProps> = React.memo(({
   currentView,
+  canGoBack,
   searchQuery,
   recentSearches,
   isOfflineMode = false,
@@ -29,8 +30,6 @@ export const Header: React.FC<HeaderProps> = React.memo(({
   onSelectRecentSearch,
   onRemoveRecentSearch,
   onClearRecentSearches,
-  selectedGenre,
-  onGenreSelect,
   onOpenLegal,
   onOpenSleepTimer,
   onBack
@@ -62,27 +61,18 @@ export const Header: React.FC<HeaderProps> = React.memo(({
     }
   };
 
-  const regions = [
-    { id: 'all', label: 'All Countries' },
-    { id: 'americas', label: 'Americas' },
-    { id: 'europe', label: 'Europe' },
-    { id: 'africa', label: 'Africa' },
-    { id: 'asia', label: 'Asia' },
-    { id: 'global', label: 'World Charts' }
-  ];
-
   const filteredHistory = searchQuery.trim()
     ? recentSearches.filter(term => term.toLowerCase().includes(searchQuery.trim().toLowerCase()))
     : recentSearches;
 
-  const showMobileBack = currentView === 'playlist' || currentView === 'search';
+  const showBack = canGoBack || currentView !== 'home';
 
   return (
-    <header className="sticky top-0 z-30 bg-[#12100E]/92 backdrop-blur-xl px-3 sm:px-5 md:px-7 py-2 sm:py-3 flex flex-col gap-2 border-b border-[#EAE0D0]/[0.08]">
+    <header className="sticky top-0 z-30 bg-[#12100E]/92 backdrop-blur-xl px-3 sm:px-5 md:px-7 py-2.5 sm:py-3 flex flex-col gap-2 border-b border-[#EAE0D0]/[0.08]">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
         {/* Mobile Top Row */}
         <div className="flex items-center justify-between sm:hidden">
-          {showMobileBack ? (
+          {showBack ? (
             <button
               type="button"
               onClick={onBack}
@@ -130,14 +120,15 @@ export const Header: React.FC<HeaderProps> = React.memo(({
 
         {/* Navigation Back & Global Search Command Field */}
         <div className="flex items-center gap-2.5 flex-1 sm:max-w-2xl">
-          {showMobileBack && (
+          {showBack && (
             <button
               type="button"
               onClick={onBack}
               aria-label="Back"
-              className="hidden sm:flex w-9 h-9 rounded-xl bg-[#1B1815] border border-[#EAE0D0]/12 hover:border-[#EAE0D0]/25 text-[#C8BEB0] hover:text-[#F5F0E8] items-center justify-center transition-colors cursor-pointer shrink-0"
+              className="hidden sm:inline-flex items-center gap-1 px-3 h-9 rounded-xl bg-[#1B1815] border border-[#EAE0D0]/12 hover:border-[#D8C3A5]/45 text-[#C8BEB0] hover:text-[#F5F0E8] text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
             >
               <ChevronLeft className="w-4 h-4" />
+              <span>Back</span>
             </button>
           )}
 
@@ -173,7 +164,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                 placeholder={
                   isOfflineMode
                     ? 'Search cached tracks only (Offline)...'
-                    : 'Search global tracks, artists, countries, genres...'
+                    : 'Search songs, artists, countries, genres...'
                 }
                 aria-label="Search music"
                 className="w-full bg-[#1B1815] hover:bg-[#231F1B] focus:bg-[#231F1B] text-[#F5F0E8] text-sm pl-10 pr-9 py-2 rounded-xl border border-[#EAE0D0]/12 focus:border-[#D8C3A5] focus:outline-none transition-colors placeholder:text-[#8F8476] select-text"
@@ -284,27 +275,6 @@ export const Header: React.FC<HeaderProps> = React.memo(({
             <span className="lg:hidden">Legal</span>
           </button>
         </div>
-      </div>
-
-      {/* Interactive World Region Filter Tabs */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
-        {regions.map((region) => {
-          const isActive = selectedGenre === region.id;
-          return (
-            <button
-              type="button"
-              key={region.id}
-              onClick={() => onGenreSelect(region.id)}
-              className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer border ${
-                isActive
-                  ? 'bg-[#D8C3A5] text-[#12100E] border-[#D8C3A5] font-bold'
-                  : 'bg-[#1B1815] text-[#C8BEB0] border-[#EAE0D0]/[0.08] hover:bg-[#24201B] hover:text-[#F5F0E8]'
-              }`}
-            >
-              {region.label}
-            </button>
-          );
-        })}
       </div>
     </header>
   );

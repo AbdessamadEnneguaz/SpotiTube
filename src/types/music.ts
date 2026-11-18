@@ -3,6 +3,16 @@ export interface LyricLine {
   text: string;
 }
 
+export type AppView =
+  | 'home'
+  | 'countries'
+  | 'mixes'
+  | 'charts'
+  | 'recent'
+  | 'search'
+  | 'library'
+  | 'playlist';
+
 export type WorldRegion = 'americas' | 'europe' | 'africa' | 'asia' | 'global';
 
 export interface Track {

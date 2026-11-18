@@ -128,6 +128,9 @@ export async function showBackgroundNowPlayingNotification(
   track: Track | null,
   isPlaying: boolean
 ): Promise<void> {
+  if (typeof window !== 'undefined' && (window as unknown as { SpotiTubeAndroid?: unknown }).SpotiTubeAndroid) {
+    return;
+  }
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
   if (
     !track ||
@@ -144,8 +147,8 @@ export async function showBackgroundNowPlayingNotification(
     const reg = await navigator.serviceWorker.ready;
     if (reg && typeof reg.showNotification === 'function') {
       await reg.showNotification(track.title, {
-        body: `${track.artist} • Playing in background`,
-        icon: '/pwa-192x192.png',
+        body: `${track.artist} · Playing in background`,
+        icon: track.thumbnail || '/pwa-192x192.png',
         badge: '/pwa-192x192.png',
         tag: BG_NOTIFICATION_TAG,
         silent: true

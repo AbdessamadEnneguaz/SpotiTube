@@ -2,8 +2,10 @@ package com.spotitube.app
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -24,6 +26,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.webkit.WebViewAssetLoader
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -32,6 +35,21 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: BackgroundWebView
     @Volatile
     private var loadedBundledFallback = false
+    @Volatile
+    private var canGoBackInSpa = false
+
+    private val mediaCommandReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val command = intent?.getStringExtra(BackgroundAudioService.EXTRA_COMMAND) ?: return
+            val escaped = JSONObject.quote(command)
+            webView.post {
+                webView.evaluateJavascript(
+                    "window.__spotitubeMediaControl && window.__spotitubeMediaControl($escaped)",
+                    null
+                )
+            }
+        }
+    }
 
     companion object {
         private const val BUNDLED_APP_URL = "https://appassets.androidplatform.net/index.html"
@@ -42,6 +60,13 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
 
         requestNotificationPermissionIfNeeded()
+
+        ContextCompat.registerReceiver(
+            this,
+            mediaCommandReceiver,
+            IntentFilter(BackgroundAudioService.ACTION_MEDIA_COMMAND),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         val assetLoader = WebViewAssetLoader.Builder()
             .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
@@ -138,7 +163,9 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (webView.canGoBack()) {
+                if (canGoBackInSpa) {
+                    webView.evaluateJavascript("window.__spotitubeBack && window.__spotitubeBack()", null)
+                } else if (webView.canGoBack()) {
                     webView.goBack()
                 } else {
                     moveTaskToBack(true)
@@ -197,6 +224,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        try {
+            unregisterReceiver(mediaCommandReceiver)
+        } catch (_: Exception) {
+        }
         stopService(Intent(this, BackgroundAudioService::class.java))
         super.onDestroy()
     }
@@ -218,23 +249,50 @@ class MainActivity : AppCompatActivity() {
     inner class SpotiTubeBridge {
         @JavascriptInterface
         fun setPlayingState(playing: Boolean, title: String, artist: String) {
+            updateMediaState(playing, playing, title, artist, "", 0L, 0L)
+        }
+
+        @JavascriptInterface
+        fun updateMediaState(
+            hasTrack: Boolean,
+            playing: Boolean,
+            title: String,
+            artist: String,
+            artworkUrl: String,
+            durationMs: Long,
+            positionMs: Long
+        ) {
             runOnUiThread {
-                webView.keepAliveInBackground = playing
+                webView.keepAliveInBackground = hasTrack && playing
                 val serviceIntent = Intent(this@MainActivity, BackgroundAudioService::class.java).apply {
-                    action = if (playing) {
+                    action = if (hasTrack) {
                         BackgroundAudioService.ACTION_START_OR_UPDATE
                     } else {
                         BackgroundAudioService.ACTION_STOP
                     }
+                    putExtra(BackgroundAudioService.EXTRA_HAS_TRACK, hasTrack)
+                    putExtra(BackgroundAudioService.EXTRA_IS_PLAYING, playing)
                     putExtra(BackgroundAudioService.EXTRA_TITLE, title)
                     putExtra(BackgroundAudioService.EXTRA_ARTIST, artist)
+                    putExtra(BackgroundAudioService.EXTRA_ARTWORK_URL, artworkUrl)
+                    putExtra(BackgroundAudioService.EXTRA_DURATION_MS, durationMs)
+                    putExtra(BackgroundAudioService.EXTRA_POSITION_MS, positionMs)
                 }
-                if (playing) {
+                if (hasTrack && playing) {
                     ContextCompat.startForegroundService(this@MainActivity, serviceIntent)
                 } else {
-                    startService(serviceIntent)
+                    try {
+                        startService(serviceIntent)
+                    } catch (_: Exception) {
+                        // Safe no-op if Android blocks non-foreground service start while backgrounded
+                    }
                 }
             }
+        }
+
+        @JavascriptInterface
+        fun setCanGoBack(canGoBack: Boolean) {
+            canGoBackInSpa = canGoBack
         }
 
         @JavascriptInterface
@@ -245,7 +303,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
                 imm?.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT)
-                WindowCompat.getInsetsController(window, webView)?.show(WindowInsetsCompat.Type.ime())
+                WindowCompat.getInsetsController(window, webView).show(WindowInsetsCompat.Type.ime())
             }
         }
     }
