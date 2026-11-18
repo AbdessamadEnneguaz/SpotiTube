@@ -62,7 +62,7 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
       "worker-src 'self'",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' https://fonts.gstatic.com data:",
-      "img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://images.unsplash.com",
+      "img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://images.unsplash.com https://upload.wikimedia.org https://thumb.wikimedia.org",
       "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
       "media-src 'self' data: blob: https:",
       "connect-src 'self' ws: wss: https://pipedapi.kavin.rocks https://pipedapi.adminforge.de https://api.piped.private.coffee https://i.ytimg.com https://images.unsplash.com",
@@ -109,6 +109,75 @@ app.get('/api/search', async (req: Request, res: Response) => {
     return res.json(results);
   } catch {
     return res.status(500).json([]);
+  }
+});
+
+const artistBioCache = new Map<string, { extract: string; description: string; thumbnail?: string; expiresAt: number }>();
+
+app.get('/api/artist', async (req: Request, res: Response) => {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (isSearchRateLimited(clientIp)) {
+    res.setHeader('Retry-After', '60');
+    return res.status(429).json({ error: 'Too many requests.' });
+  }
+
+  const rawName = typeof req.query.name === 'string' ? req.query.name : '';
+  const cleanName = sanitizeSearchQuery(rawName).slice(0, 80);
+  if (!cleanName || cleanName.length < 2) {
+    return res.json({ found: false });
+  }
+
+  const cacheKey = cleanName.toLowerCase();
+  const cached = artistBioCache.get(cacheKey);
+  if (cached && Date.now() < cached.expiresAt) {
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.json({ found: true, ...cached });
+  }
+
+  try {
+    const slug = encodeURIComponent(cleanName.replace(/\s+/g, '_'));
+    const wikiRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`, {
+      headers: {
+        Accept: 'application/json',
+        'User-Agent': 'SpotiTubeMusicDirectory/1.0'
+      },
+      signal: AbortSignal.timeout(2500)
+    });
+
+    if (!wikiRes.ok) {
+      return res.json({ found: false });
+    }
+
+    const data = await wikiRes.json() as {
+      type?: string;
+      extract?: string;
+      description?: string;
+      thumbnail?: { source?: string };
+    };
+
+    if (!data || data.type === 'disambiguation' || !data.extract) {
+      return res.json({ found: false });
+    }
+
+    const payload = {
+      extract: String(data.extract).slice(0, 600),
+      description: String(data.description || '').slice(0, 140),
+      thumbnail:
+        typeof data.thumbnail?.source === 'string' && data.thumbnail.source.startsWith('https://')
+          ? data.thumbnail.source
+          : undefined,
+      expiresAt: Date.now() + 1000 * 60 * 60 * 12
+    };
+
+    if (artistBioCache.size >= 250) {
+      const oldestKey = artistBioCache.keys().next().value;
+      if (oldestKey !== undefined) artistBioCache.delete(oldestKey);
+    }
+    artistBioCache.set(cacheKey, payload);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.json({ found: true, ...payload });
+  } catch {
+    return res.json({ found: false });
   }
 });
 

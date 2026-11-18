@@ -156,7 +156,7 @@ function extractVideosFromYouTubeJson(data: any): SearchResultItem[] {
         const channel =
           v.ownerText?.runs?.map((r: any) => r.text).join('') ||
           v.longBylineText?.runs?.map((r: any) => r.text).join('') ||
-          'YouTube Artist';
+          'Global Artist';
         const length = v.lengthText?.simpleText || '';
         const rawThumb = v.thumbnail?.thumbnails?.[v.thumbnail.thumbnails.length - 1]?.url;
 
@@ -269,8 +269,8 @@ async function searchViaPublicMirrors(query: string): Promise<SearchResultItem[]
           id,
           youtubeId: id,
           title: String(item.title || 'Unknown Title').slice(0, 200),
-          channel: String(item.uploaderName || 'YouTube Artist').slice(0, 120),
-          artist: String(item.uploaderName || 'YouTube Artist').slice(0, 120),
+          channel: String(item.uploaderName || 'Global Artist').slice(0, 120),
+          artist: String(item.uploaderName || 'Global Artist').slice(0, 120),
           thumbnail: safeHttpsThumbnail(item.thumbnail, id),
           durationSeconds: dur,
           durationFormatted: formatSeconds(dur)

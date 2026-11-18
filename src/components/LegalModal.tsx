@@ -19,7 +19,7 @@ export const LegalModal: React.FC<LegalModalProps> = ({
 
   const handleClearData = () => {
     try {
-      localStorage.removeItem('spotitube_liked_tracks');
+      localStorage.removeItem('spotitube_liked_ids');
       localStorage.removeItem('spotitube_custom_playlists');
       localStorage.removeItem('spotitube_recent_searches_v2');
       localStorage.removeItem('spotitube_volume');
@@ -33,39 +33,39 @@ export const LegalModal: React.FC<LegalModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
-      <div 
-        className="relative w-full max-w-3xl bg-[#181818] border border-neutral-800 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-neutral-200"
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md">
+      <div
+        className="relative w-full max-w-3xl bg-[#1B1815] border border-[#EAE0D0]/12 rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden text-[#E4DDD2]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 bg-[#121212]/90">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#EAE0D0]/[0.07] bg-[#161310]">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#1db954]/20 text-[#1db954] flex items-center justify-center">
+            <div className="w-9 h-9 rounded-xl bg-[#D8C3A5]/15 text-[#DFCCB0] flex items-center justify-center">
               <Shield className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-white font-bold text-base sm:text-lg">Legal, Privacy & Compliance</h2>
-              <p className="text-xs text-neutral-400">SpotiTube Official Launch & Rights Documentation</p>
+              <h2 className="font-display text-[#F5F0E8] font-bold text-base sm:text-lg">Legal, Privacy &amp; Compliance</h2>
+              <p className="text-xs text-[#9E9384]">SpotiTube Platform Documentation</p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="p-1.5 rounded-full hover:bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+            className="p-1.5 rounded-lg hover:bg-[#EAE0D0]/[0.06] text-[#9E9384] hover:text-[#F5F0E8] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-1 px-6 pt-3 border-b border-neutral-800 bg-[#121212]/50 overflow-x-auto scrollbar-none text-xs sm:text-sm font-semibold">
+        <div className="flex items-center gap-1 px-6 pt-3 border-b border-[#EAE0D0]/[0.07] bg-[#161310]/60 overflow-x-auto scrollbar-none text-xs sm:text-sm font-semibold">
           <button
+            type="button"
             onClick={() => setActiveTab('privacy')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'privacy'
-                ? 'border-[#1db954] text-[#1db954]'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                ? 'border-[#D8C3A5] text-[#DFCCB0]'
+                : 'border-transparent text-[#9E9384] hover:text-[#E4DDD2]'
             }`}
           >
             <Shield className="w-4 h-4" />
@@ -73,11 +73,12 @@ export const LegalModal: React.FC<LegalModalProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('terms')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'terms'
-                ? 'border-[#1db954] text-[#1db954]'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                ? 'border-[#D8C3A5] text-[#DFCCB0]'
+                : 'border-transparent text-[#9E9384] hover:text-[#E4DDD2]'
             }`}
           >
             <FileText className="w-4 h-4" />
@@ -85,153 +86,100 @@ export const LegalModal: React.FC<LegalModalProps> = ({
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('dmca')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'dmca'
-                ? 'border-[#1db954] text-[#1db954]'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                ? 'border-[#D8C3A5] text-[#DFCCB0]'
+                : 'border-transparent text-[#9E9384] hover:text-[#E4DDD2]'
             }`}
           >
             <Scale className="w-4 h-4" />
-            <span>Copyright & DMCA</span>
+            <span>Copyright &amp; DMCA</span>
           </button>
 
           <button
+            type="button"
             onClick={() => setActiveTab('cookies')}
-            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-2 px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'cookies'
-                ? 'border-[#1db954] text-[#1db954]'
-                : 'border-transparent text-neutral-400 hover:text-neutral-200'
+                ? 'border-[#D8C3A5] text-[#DFCCB0]'
+                : 'border-transparent text-[#9E9384] hover:text-[#E4DDD2]'
             }`}
           >
             <Cookie className="w-4 h-4" />
-            <span>Cookies & Storage</span>
+            <span>Storage</span>
           </button>
         </div>
 
-        {/* Content Body */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs sm:text-sm text-neutral-300 leading-relaxed scrollbar-thin scrollbar-thumb-neutral-700">
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 text-xs sm:text-sm text-[#C8BEB0] leading-relaxed">
           {activeTab === 'privacy' && (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/40 text-emerald-300 text-xs">
-                <strong>Privacy Commitment:</strong> SpotiTube does not collect, sell, or rent your personal data to third parties. We do not require registration, login credentials, or phone numbers.
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-xl bg-[#D8C3A5]/10 border border-[#D8C3A5]/25 text-[#EDE0CC] text-xs">
+                <strong>Privacy Commitment:</strong> SpotiTube does not collect, sell, or rent your personal data. No sign-up or credentials are required.
               </div>
-
-              <h3 className="text-white font-bold text-base">1. Information We Do NOT Collect</h3>
-              <p>
-                We do not track your IP address, name, physical location, or browsing habits across the web. There are no tracking pixels, profiling cookies, or analytics beacons embedded into the application.
-              </p>
-
-              <h3 className="text-white font-bold text-base">2. Local Browser Storage Only</h3>
-              <p>
-                All your playlists, favorite songs, search history, and volume settings are stored locally on your device via standard browser <code className="bg-black/60 px-1 py-0.5 rounded text-emerald-400">localStorage</code>. This data never leaves your computer and is never transmitted to any external marketing database.
-              </p>
-
-              <h3 className="text-white font-bold text-base">3. Embedded YouTube Playback</h3>
-              <p>
-                Audio playback is rendered using the official YouTube IFrame Embed Player API. When streaming, your browser establishes a secure direct connection with Google/YouTube CDN servers, governed by Google’s Privacy Policy.
-              </p>
+              <h3 className="text-[#F5F0E8] font-bold text-base">1. Zero Personal Tracking</h3>
+              <p>We do not embed advertising beacons, third-party profiling pixels, or behavioral analytics trackers.</p>
+              <h3 className="text-[#F5F0E8] font-bold text-base">2. Local Device Storage</h3>
+              <p>Your playlists, favorites, search history, and cached metadata are stored locally on your device via standard browser storage.</p>
+              <h3 className="text-[#F5F0E8] font-bold text-base">3. Streaming Connections</h3>
+              <p>Playback streams directly via the official YouTube IFrame Embed API and verified audio streams subject to their terms.</p>
             </div>
           )}
 
           {activeTab === 'terms' && (
-            <div className="space-y-4 animate-fadeIn">
-              <h3 className="text-white font-bold text-base">1. Non-Commercial Media Discovery Platform</h3>
+            <div className="space-y-4">
+              <h3 className="text-[#F5F0E8] font-bold text-base">1. Personal Music Soundstage</h3>
+              <p>SpotiTube is provided free of charge for personal music discovery and queue organization.</p>
+              <h3 className="text-[#F5F0E8] font-bold text-base">2. YouTube Terms Compliance</h3>
               <p>
-                SpotiTube is an educational and personal music discovery player interface. It is provided free of charge for non-commercial media organization and listening purposes.
-              </p>
-
-              <h3 className="text-white font-bold text-base">2. YouTube Terms of Service Compliance</h3>
-              <p>
-                By using SpotiTube to stream audio content, users agree to be bound by the{' '}
-                <a 
-                  href="https://www.youtube.com/t/terms" 
-                  target="_blank" 
-                  rel="noreferrer" 
-                  className="text-[#1db954] hover:underline inline-flex items-center gap-0.5"
+                Streaming via embedded playback adheres to the{' '}
+                <a
+                  href="https://www.youtube.com/t/terms"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-[#DFCCB0] hover:underline inline-flex items-center gap-0.5"
                 >
                   YouTube Terms of Service <ExternalLink className="w-3 h-3" />
                 </a>.
               </p>
-
-              <h3 className="text-white font-bold text-base">3. Intellectual Property</h3>
-              <p>
-                All music tracks, artwork, artist names, logos, and album covers displayed in the search engine or discovery view are the intellectual property of their respective recording artists, record labels, and copyright owners.
-              </p>
-
-              <h3 className="text-white font-bold text-base">4. Acceptable Use</h3>
-              <p>
-                Users agree not to attempt to rip, circumvent DRM, reverse-engineer, bulk scrape, or download unauthorized digital audio copies from the platform.
-              </p>
+              <h3 className="text-[#F5F0E8] font-bold text-base">3. Intellectual Property</h3>
+              <p>All tracks, titles, and cover artworks belong to their respective recording artists, labels, and copyright owners.</p>
             </div>
           )}
 
           {activeTab === 'dmca' && (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="p-3 rounded-lg bg-neutral-900 border border-neutral-800 text-xs text-neutral-300">
-                <strong>No Media Files Stored:</strong> SpotiTube does not host, upload, or re-encode any media files. All streams are embedded via YouTube’s official public embed endpoints.
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-xl bg-[#12100E]/75 border border-[#EAE0D0]/12 text-xs text-[#C8BEB0]">
+                <strong>No Media Hosting:</strong> SpotiTube does not host or re-encode audio/video files on its servers.
               </div>
-
-              <h3 className="text-white font-bold text-base">Copyright & Takedown Notices (DMCA)</h3>
+              <h3 className="text-[#F5F0E8] font-bold text-base">Copyright &amp; Takedowns (DMCA)</h3>
               <p>
-                SpotiTube fully complies with the Digital Millennium Copyright Act (DMCA) and international intellectual property law. Because content is served directly from YouTube’s public catalogue, removing or making a video private on YouTube instantly removes it from SpotiTube worldwide.
+                Removing or setting a video private on YouTube immediately removes it from playback. For catalog exclusion requests, write to{' '}
+                <span className="text-[#DFCCB0] font-mono">enneguazabdo259@gmail.com</span>.
               </p>
-
-              <h3 className="text-white font-bold text-base">Content Inquiries</h3>
-              <p>
-                If you are a copyright owner or licensing representative and wish to request that specific metadata or YouTube video IDs be excluded from our local indexing, please contact the maintainer at{' '}
-                <span className="text-[#1db954] font-mono">enneguazabdo259@gmail.com</span> with:
-              </p>
-              <ul className="list-disc list-inside space-y-1 text-neutral-400 pl-2">
-                <li>Identification of the copyrighted work claimed to have been infringed.</li>
-                <li>The exact YouTube URL or track identifier.</li>
-                <li>Your contact information and statement of authorization.</li>
-              </ul>
             </div>
           )}
 
           {activeTab === 'cookies' && (
-            <div className="space-y-4 animate-fadeIn">
-              <h3 className="text-white font-bold text-base">Cookie-Free Experience</h3>
-              <p>
-                SpotiTube does not set any advertising, tracking, or marketing cookies. You can browse, search, and play music without third-party tracking scripts recording your profile.
-              </p>
+            <div className="space-y-4">
+              <h3 className="text-[#F5F0E8] font-bold text-base">Cookie-Free Local Storage</h3>
+              <p>Only essential local preferences (favorites, custom playlists, recent searches, volume) are stored on your device.</p>
 
-              <h3 className="text-white font-bold text-base">Client-Side Functional Storage</h3>
-              <p>The following local variables are retained in your browser strictly for playback functionality:</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 font-mono text-xs">
-                <div className="p-2.5 rounded bg-black/50 border border-neutral-800">
-                  <span className="text-emerald-400 font-bold block">spotitube_liked_tracks</span>
-                  <span className="text-neutral-400 text-[11px]">List of songs you added to Liked Tracks</span>
-                </div>
-                <div className="p-2.5 rounded bg-black/50 border border-neutral-800">
-                  <span className="text-emerald-400 font-bold block">spotitube_custom_playlists</span>
-                  <span className="text-neutral-400 text-[11px]">Playlists you created manually</span>
-                </div>
-                <div className="p-2.5 rounded bg-black/50 border border-neutral-800">
-                  <span className="text-emerald-400 font-bold block">spotitube_recent_searches_v2</span>
-                  <span className="text-neutral-400 text-[11px]">Recent search queries for quick re-trigger</span>
-                </div>
-                <div className="p-2.5 rounded bg-black/50 border border-neutral-800">
-                  <span className="text-emerald-400 font-bold block">spotitube_volume</span>
-                  <span className="text-neutral-400 text-[11px]">Your preferred audio volume level</span>
-                </div>
-              </div>
-
-              {/* Reset Data Button */}
-              <div className="pt-4 border-t border-neutral-800 flex items-center justify-between">
+              <div className="pt-4 border-t border-[#EAE0D0]/[0.08] flex items-center justify-between gap-4">
                 <div>
-                  <h4 className="font-bold text-white text-xs sm:text-sm">Clear Local Data</h4>
-                  <p className="text-[11px] text-neutral-400">Remove all locally saved playlists, likes, and search history from this browser.</p>
+                  <h4 className="font-bold text-[#F5F0E8] text-xs sm:text-sm">Clear Local Data</h4>
+                  <p className="text-[11px] text-[#9E9384]">Remove locally saved playlists, favorites, and search history.</p>
                 </div>
                 <button
+                  type="button"
                   onClick={handleClearData}
-                  className="px-3.5 py-1.5 rounded-full bg-neutral-800 hover:bg-red-900/40 text-neutral-300 hover:text-red-300 border border-neutral-700 hover:border-red-700/60 transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
+                  className="px-3.5 py-2 rounded-xl bg-[#EAE0D0]/[0.06] hover:bg-rose-900/40 text-[#E4DDD2] hover:text-rose-200 border border-[#EAE0D0]/12 transition-colors text-xs font-semibold flex items-center gap-1.5 cursor-pointer shrink-0"
                 >
                   {dataCleared ? (
                     <>
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="text-emerald-400">Data Cleared!</span>
+                      <CheckCircle2 className="w-3.5 h-3.5 text-[#DFCCB0]" />
+                      <span className="text-[#DFCCB0]">Cleared</span>
                     </>
                   ) : (
                     <>
@@ -245,15 +193,12 @@ export const LegalModal: React.FC<LegalModalProps> = ({
           )}
         </div>
 
-        {/* Modal Footer */}
-        <div className="px-6 py-3.5 border-t border-neutral-800 bg-[#121212] flex items-center justify-between text-xs text-neutral-400">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#1db954]" />
-            <span>SpotiTube Media Platform • Verified Production Build</span>
-          </div>
+        <div className="px-6 py-3.5 border-t border-[#EAE0D0]/[0.07] bg-[#161310] flex items-center justify-between text-xs text-[#9E9384]">
+          <span>SpotiTube Global Soundstage</span>
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-full bg-white text-black font-bold hover:bg-neutral-200 transition-colors cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-[#D8C3A5] text-[#12100E] font-bold hover:bg-[#E4D3BA] transition-colors cursor-pointer"
           >
             Close
           </button>

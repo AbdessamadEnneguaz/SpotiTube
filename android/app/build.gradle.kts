@@ -15,8 +15,8 @@ android {
         applicationId = "com.spotitube.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 8
+        versionName = "1.0.7"
         buildConfigField("String", "APP_URL", "\"$spotitubeAppUrl\"")
     }
 

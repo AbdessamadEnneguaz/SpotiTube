@@ -182,55 +182,59 @@ python app.py
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none">
-      <div className="bg-[#181818] border border-neutral-700 w-full max-w-4xl h-[85vh] rounded-2xl flex flex-col shadow-2xl relative text-white overflow-hidden">
+      <div className="bg-[#1B1815] border border-[#EAE0D0]/12 w-full max-w-4xl h-[85vh] rounded-2xl flex flex-col shadow-2xl relative text-[#F5F0E8] overflow-hidden">
         {/* Top Header */}
-        <div className="p-4 border-b border-neutral-800 flex items-center justify-between bg-[#121212]">
+        <div className="p-4 border-b border-[#EAE0D0]/[0.08] flex items-center justify-between bg-[#161310]">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#1db954]/20 text-[#1db954] flex items-center justify-center font-mono font-bold">
+            <div className="w-8 h-8 rounded-xl bg-[#D8C3A5]/15 text-[#DFCCB0] flex items-center justify-center font-mono font-bold">
               <Terminal className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-base font-bold">Local Python & Vanilla Stack Deliverables</h2>
-                <span className="text-[10px] bg-[#1db954] text-black font-extrabold px-1.5 py-0.2 rounded-full uppercase">
+                <h2 className="font-display text-base font-bold">Local Python &amp; Vanilla Stack Deliverables</h2>
+                <span className="text-[10px] bg-[#D8C3A5] text-[#12100E] font-bold px-1.5 py-0.5 rounded uppercase">
                   Zero API Key
                 </span>
               </div>
-              <p className="text-xs text-neutral-400">Powered by <code className="text-[#1db954]">app.py</code> with <code className="text-[#1db954]">yt-dlp</code> search extraction</p>
+              <p className="text-xs text-[#9E9384]">Powered by <code className="text-[#DFCCB0]">app.py</code> with <code className="text-[#DFCCB0]">yt-dlp</code> search extraction</p>
             </div>
           </div>
 
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close guide"
-            className="text-neutral-400 hover:text-white p-1 rounded-full hover:bg-neutral-800 transition-colors cursor-pointer"
+            className="text-[#9E9384] hover:text-[#F5F0E8] p-1.5 rounded-lg hover:bg-[#24201B] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Bar */}
-        <div className="flex items-center gap-2 px-4 py-2 border-b border-neutral-800 bg-[#141414] text-xs">
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-[#EAE0D0]/[0.08] bg-[#161310]/80 text-xs">
           <button
+            type="button"
             onClick={() => setActiveTab('instructions')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
-              activeTab === 'instructions' ? 'bg-[#1db954] text-black font-bold' : 'text-neutral-300 hover:bg-neutral-800'
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+              activeTab === 'instructions' ? 'bg-[#D8C3A5] text-[#12100E] font-bold' : 'text-[#C8BEB0] hover:bg-[#24201B]'
             }`}
           >
             Terminal Quickstart
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('backend')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
-              activeTab === 'backend' ? 'bg-[#1db954] text-black font-bold' : 'text-neutral-300 hover:bg-neutral-800'
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+              activeTab === 'backend' ? 'bg-[#D8C3A5] text-[#12100E] font-bold' : 'text-[#C8BEB0] hover:bg-[#24201B]'
             }`}
           >
             Python Backend (app.py)
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('frontend_html')}
-            className={`px-3 py-1.5 rounded-md font-semibold transition-colors cursor-pointer ${
-              activeTab === 'frontend_html' ? 'bg-[#1db954] text-black font-bold' : 'text-neutral-300 hover:bg-neutral-800'
+            className={`px-3 py-1.5 rounded-lg font-semibold transition-colors cursor-pointer ${
+              activeTab === 'frontend_html' ? 'bg-[#D8C3A5] text-[#12100E] font-bold' : 'text-[#C8BEB0] hover:bg-[#24201B]'
             }`}
           >
             Vanilla HTML (index.html)
@@ -238,8 +242,9 @@ python app.py
         </div>
 
         {/* Tab Content */}
-        <div className="flex-1 overflow-y-auto p-4 bg-[#0d0d0d] font-mono text-xs relative">
+        <div className="flex-1 overflow-y-auto p-4 bg-[#12100E] font-mono text-xs relative">
           <button
+            type="button"
             onClick={() => {
               const text =
                 activeTab === 'instructions'
@@ -249,22 +254,22 @@ python app.py
                   : codeFrontendHtml;
               copyToClipboard(text, activeTab);
             }}
-            className="absolute top-6 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 transition-all cursor-pointer shadow-lg z-10"
+            className="absolute top-6 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#24201B] hover:bg-[#2F2A24] text-[#F5F0E8] border border-[#EAE0D0]/12 transition-all cursor-pointer shadow-lg z-10"
           >
             {copied === activeTab ? (
               <>
-                <Check className="w-3.5 h-3.5 text-[#1db954]" />
-                <span className="text-[#1db954] font-sans text-xs">Copied!</span>
+                <Check className="w-3.5 h-3.5 text-[#DFCCB0]" />
+                <span className="text-[#DFCCB0] font-sans text-xs">Copied!</span>
               </>
             ) : (
               <>
-                <Copy className="w-3.5 h-3.5 text-neutral-400" />
+                <Copy className="w-3.5 h-3.5 text-[#9E9384]" />
                 <span className="font-sans text-xs">Copy Code</span>
               </>
             )}
           </button>
 
-          <pre className="text-neutral-300 leading-relaxed overflow-x-auto whitespace-pre">
+          <pre className="text-[#C8BEB0] leading-relaxed overflow-x-auto whitespace-pre">
             {activeTab === 'instructions' && codeInstructions}
             {activeTab === 'backend' && codeBackend}
             {activeTab === 'frontend_html' && codeFrontendHtml}
@@ -272,11 +277,12 @@ python app.py
         </div>
 
         {/* Bottom Actions */}
-        <div className="p-3 border-t border-neutral-800 bg-[#121212] flex items-center justify-between text-xs text-neutral-400">
-          <span>Compliant metadata search via yt-dlp & official YouTube IFrame API playback.</span>
+        <div className="p-3 border-t border-[#EAE0D0]/[0.08] bg-[#161310] flex items-center justify-between text-xs text-[#9E9384]">
+          <span>Compliant metadata search via yt-dlp &amp; official YouTube IFrame API playback.</span>
           <button
+            type="button"
             onClick={onClose}
-            className="px-4 py-1.5 rounded-full bg-white text-black font-bold hover:bg-neutral-200 transition-colors cursor-pointer"
+            className="px-4 py-1.5 rounded-xl bg-[#D8C3A5] text-[#12100E] font-bold hover:bg-[#E4D3BA] transition-colors cursor-pointer"
           >
             Done
           </button>

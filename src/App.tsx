@@ -4,17 +4,12 @@ import {
   Pause,
   Heart,
   Clock,
-  Sparkles,
-  Music2,
-  ListMusic,
-  Flame,
   Globe2,
-  Compass,
-  Radio,
-  Search,
-  Moon,
-  PlusSquare
+  PlusSquare,
+  ArrowRight,
+  Compass
 } from 'lucide-react';
+import heroWorldStudio from './assets/images/hero_world_studio_1795013397130.jpg';
 import { Sidebar } from './components/Sidebar';
 import { MobileNav } from './components/MobileNav';
 import { Header } from './components/Header';
@@ -30,7 +25,12 @@ import { YouTubePlayerEmbed } from './components/YouTubePlayerEmbed';
 import { CoverImage } from './components/CoverImage';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { BackgroundPermissionModal } from './components/BackgroundPermissionModal';
-import { CURATED_TRACKS, PLAYLISTS } from './data/curatedTracks';
+import {
+  CURATED_TRACKS,
+  PLAYLISTS,
+  WORLD_COUNTRY_PRESETS,
+  DEFAULT_FAVORITES_COVER
+} from './data/curatedTracks';
 import { Track, Playlist, RepeatMode } from './types/music';
 import { searchYouTube } from './services/youtubeApi';
 import {
@@ -68,9 +68,40 @@ import {
   getNotificationPermissionState
 } from './utils/backgroundPermission';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
-import { formatDuration } from './utils/formatters';
 import { safeParseJson, sanitizeMediaUrl, sanitizeClientText } from './utils/security';
 import { unlockAudioKeepAlive } from './utils/backgroundAudio';
+
+const REGION_SECTIONS: Array<{
+  id: 'americas' | 'europe' | 'africa' | 'asia';
+  title: string;
+  subtitle: string;
+  playlistId: string;
+}> = [
+  {
+    id: 'americas',
+    title: 'Americas & Latin Wave',
+    subtitle: 'United States · Canada · Puerto Rico · Colombia · Brazil',
+    playlistId: 'playlist_americas_latin'
+  },
+  {
+    id: 'europe',
+    title: 'Europe Pop & Electronic',
+    subtitle: 'United Kingdom · France · Belgium · Spain',
+    playlistId: 'playlist_europe_nights'
+  },
+  {
+    id: 'africa',
+    title: 'Africa: Afrobeats & Amapiano',
+    subtitle: 'Nigeria · South Africa · Mediterranean Fusion',
+    playlistId: 'playlist_africa_pulse'
+  },
+  {
+    id: 'asia',
+    title: 'Asia: K-Pop, J-Pop & Bollywood',
+    subtitle: 'South Korea · Japan · India',
+    playlistId: 'playlist_asia_soundwave'
+  }
+];
 
 export default function App() {
   // Navigation & View State
@@ -90,7 +121,7 @@ export default function App() {
     loadCachedTrackEntries()
   );
 
-  // Automatic Offline Detection (no manual toggle — switches automatically on network loss/recovery)
+  // Automatic Offline Detection
   const isOnline = useOnlineStatus();
   const isOfflineMode = !isOnline;
   const wasOnlineRef = useRef(isOnline);
@@ -105,8 +136,8 @@ export default function App() {
     wasOnlineRef.current = isOnline;
     setOfflineNotice(
       isOnline
-        ? 'Internet restored — live search & full streaming enabled'
-        : `Offline detected — playing ${cachedTrackEntries.length} cached ${cachedTrackEntries.length === 1 ? 'track' : 'tracks'} only`
+        ? 'Connection restored — live search & streaming active'
+        : `Offline mode — ${cachedTrackEntries.length} cached ${cachedTrackEntries.length === 1 ? 'track' : 'tracks'} ready`
     );
   }, [isOnline, cachedTrackEntries.length]);
 
@@ -117,7 +148,6 @@ export default function App() {
   }, [offlineNotice]);
 
   useEffect(() => {
-    // Pre-warm initial cover artwork thumbnails into Cache Storage on idle
     const timer = setTimeout(() => {
       void warmCuratedCoversCache(CURATED_TRACKS);
     }, 1200);
@@ -136,7 +166,6 @@ export default function App() {
     return cachedTrackEntries.map((entry) => entry.track);
   }, [cachedTrackEntries]);
 
-  // Save recent searches to localStorage
   useEffect(() => {
     saveRecentSearches(recentSearches);
   }, [recentSearches]);
@@ -144,6 +173,7 @@ export default function App() {
   const handleSelectRecentSearch = useCallback((term: string) => {
     setSearchQuery(term);
     setCurrentView('search');
+    setSelectedPlaylistId(null);
     setRecentSearches(prev => addSearchTerm(prev, term));
   }, []);
 
@@ -163,7 +193,6 @@ export default function App() {
 
   // Modals & Panels State
   const [isQueueOpen, setIsQueueOpen] = useState(false);
-  const [isVideoVisible, setIsVideoVisible] = useState(false);
   const [isExpandedCoverOpen, setIsExpandedCoverOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isBgPermissionOpen, setIsBgPermissionOpen] = useState<boolean>(() =>
@@ -181,7 +210,7 @@ export default function App() {
 
   // Sleep Timer state
   const [sleepTimerMinutes, setSleepTimerMinutes] = useState<number | null>(null);
-  const [sleepTimerSecondsLeft, setSleepTimerSecondsLeft] = useState<number | null>(null);
+  const [, setSleepTimerSecondsLeft] = useState<number | null>(null);
 
   // Custom User Playlists
   const [customPlaylists, setCustomPlaylists] = useState<Playlist[]>(() => {
@@ -194,10 +223,7 @@ export default function App() {
           ...pl,
           name: sanitizeClientText(pl.name, 80) || 'Custom Playlist',
           description: sanitizeClientText(pl.description || '', 200),
-          coverImage: sanitizeMediaUrl(
-            pl.coverImage,
-            'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500&auto=format&fit=crop&q=80'
-          ),
+          coverImage: sanitizeMediaUrl(pl.coverImage, DEFAULT_FAVORITES_COVER),
           tracks: Array.isArray(pl.tracks) ? pl.tracks : []
         }));
     } catch {
@@ -205,7 +231,6 @@ export default function App() {
     }
   });
 
-  // Save custom playlists to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('spotitube_custom_playlists', JSON.stringify(customPlaylists));
@@ -214,12 +239,11 @@ export default function App() {
     }
   }, [customPlaylists]);
 
-  // Combined playlists (built-in + user custom)
   const allPlaylists = useMemo(() => {
     return [...PLAYLISTS, ...customPlaylists];
   }, [customPlaylists]);
 
-  // Player State (No default track — user chooses their own music)
+  // Player State
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -236,22 +260,21 @@ export default function App() {
   const [shuffledIndices, setShuffledIndices] = useState<number[]>([]);
   const failedFallbackIdsRef = useRef<Set<string>>(new Set());
 
-  // User Liked Songs (Stored in localStorage)
+  // User Liked Songs (Global defaults instead of local-only)
   const [likedTrackIds, setLikedTrackIds] = useState<Set<string>>(() => {
     try {
       const saved = localStorage.getItem('spotitube_liked_ids');
       const parsed = safeParseJson<string[]>(
         saved,
-        ['chaabi_1', 'rai_1', 'rap_1'],
+        ['global_1', 'africa_burna', 'asia_bts'],
         (val): val is string[] => Array.isArray(val) && val.every((x) => typeof x === 'string')
       );
       return new Set(parsed.slice(0, 500));
     } catch {
-      return new Set(['chaabi_1', 'rai_1', 'rap_1']);
+      return new Set(['global_1', 'africa_burna', 'asia_bts']);
     }
   });
 
-  // Save liked songs to localStorage
   useEffect(() => {
     try {
       localStorage.setItem('spotitube_liked_ids', JSON.stringify(Array.from(likedTrackIds)));
@@ -260,7 +283,6 @@ export default function App() {
     }
   }, [likedTrackIds]);
 
-  // Sleep Timer countdown ticker
   useEffect(() => {
     if (sleepTimerMinutes === null || sleepTimerMinutes === -1) {
       setSleepTimerSecondsLeft(null);
@@ -284,38 +306,24 @@ export default function App() {
     return () => clearInterval(interval);
   }, [sleepTimerMinutes]);
 
-  // Dynamic Time Greeting
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  }, []);
-
-  // Update Shuffled Indices when queue or shuffle changes
   useEffect(() => {
     if (isShuffle) {
       setShuffledIndices(generateShuffledIndices(queue.length, queueIndex));
     }
   }, [isShuffle, queue.length]);
 
-  // Liked Tracks list
   const likedTracks = useMemo(() => {
     return CURATED_TRACKS.filter(t => likedTrackIds.has(t.id));
   }, [likedTrackIds]);
 
-  // Filtered tracks for the current view
   const displayedTracks = useMemo(() => {
-    if (selectedGenre !== 'all') {
-      return CURATED_TRACKS.filter(t => t.genre === selectedGenre);
-    }
-    return CURATED_TRACKS;
+    if (selectedGenre === 'all') return CURATED_TRACKS;
+    if (selectedGenre === 'global') return CURATED_TRACKS.slice(0, 12);
+    return CURATED_TRACKS.filter(t => t.region === selectedGenre || t.genre === selectedGenre);
   }, [selectedGenre]);
 
-  // Main scroll container ref for view transition resets
   const mainContentRef = useRef<HTMLElement>(null);
 
-  // Dynamic view key to trigger CSS transition animation on view or playlist change
   const viewKey = useMemo(() => {
     if (currentView === 'playlist') {
       return `playlist-${selectedPlaylistId || 'default'}`;
@@ -323,28 +331,27 @@ export default function App() {
     return currentView;
   }, [currentView, selectedPlaylistId]);
 
-  // Scroll to top on view transition for smooth feel
   useEffect(() => {
     if (mainContentRef.current) {
       mainContentRef.current.scrollTo({ top: 0, behavior: 'instant' });
     }
   }, [viewKey]);
 
-  // Active playlist data if in playlist view
   const activePlaylist = useMemo(() => {
     if (selectedPlaylistId === 'liked') {
       return {
         id: 'liked',
-        name: 'Liked Songs',
-        description: 'Your favorite personal collection of tracks and anthems.',
-        coverImage: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500&auto=format&fit=crop&q=80',
+        name: 'Saved Favorites',
+        description: 'Your personal collection of tracks across all countries.',
+        regionLabel: 'Personal Vault',
+        coverImage: DEFAULT_FAVORITES_COVER,
         tracks: likedTracks
       };
     }
     return allPlaylists.find(p => p.id === selectedPlaylistId) || null;
   }, [selectedPlaylistId, likedTracks, allPlaylists]);
 
-  // Search effect with debounce (strictly cached-only when offline is detected)
+  // Search effect with debounce
   useEffect(() => {
     const trimmed = searchQuery.trim();
     if (!trimmed) {
@@ -352,8 +359,8 @@ export default function App() {
         setSearchResults(cachedTracksList);
         setSearchStatusMsg(
           cachedTracksList.length > 0
-            ? `Offline (Auto) — showing ${cachedTracksList.length} cached ${cachedTracksList.length === 1 ? 'track' : 'tracks'} only`
-            : 'Offline (Auto) — no cached tracks saved yet'
+            ? `Offline Mode · showing ${cachedTracksList.length} cached ${cachedTracksList.length === 1 ? 'track' : 'tracks'}`
+            : 'Offline Mode · no cached tracks saved yet'
         );
       } else {
         setSearchResults(CURATED_TRACKS);
@@ -369,7 +376,7 @@ export default function App() {
       void searchYouTube(searchQuery, { offlineOnly: true }).then((res) => {
         if (cancelled) return;
         setSearchResults(res.tracks);
-        setSearchStatusMsg(res.message || 'Offline (Auto) — cached search only');
+        setSearchStatusMsg(res.message || 'Offline Mode · cached search');
       });
       return () => {
         cancelled = true;
@@ -382,12 +389,11 @@ export default function App() {
       setSearchResults(res.tracks);
       setIsSearching(false);
       if (res.source === 'local_backend') {
-        setSearchStatusMsg(`Live results (${res.tracks.length} tracks)`);
+        setSearchStatusMsg(`Live catalog · ${res.tracks.length} tracks`);
       } else {
-        setSearchStatusMsg(res.message || `Catalog matches (${res.tracks.length} tracks)`);
+        setSearchStatusMsg(res.message || `Catalog · ${res.tracks.length} tracks`);
       }
 
-      // Automatically persist successful searches to Recent Searches
       if (trimmed.length >= 2 && res.tracks.length > 0) {
         setRecentSearches(prev => addSearchTerm(prev, trimmed));
       }
@@ -406,7 +412,6 @@ export default function App() {
     setOfflineNotice(`Cached "${track.title}" for offline playback`);
   }, []);
 
-  // Track playback handlers
   const handlePlayTrack = useCallback((track: Track, contextList?: Track[]) => {
     if (!isTrackPlayableOffline(track, cachedYoutubeIds, isOfflineMode)) {
       setOfflineNotice(`"${track.title}" requires an internet connection.`);
@@ -432,7 +437,6 @@ export default function App() {
     setCurrentTime(0);
     setDuration(track.durationSeconds || 210);
 
-    // Cache track metadata & thumbnail for Cache-First offline/intermittent resilience
     setCachedTrackEntries(prev => {
       const updated = recordTrackPlay(prev, track);
       saveCachedTrackEntries(updated);
@@ -440,6 +444,17 @@ export default function App() {
     });
     void syncTrackToServiceWorkerCache(track);
   }, [currentView, searchResults, displayedTracks, queue, cachedYoutubeIds, isOfflineMode]);
+
+  const handleInspectTrack = useCallback((track: Track, contextList?: Track[]) => {
+    if (!isTrackPlayableOffline(track, cachedYoutubeIds, isOfflineMode)) {
+      setOfflineNotice(`"${track.title}" requires an internet connection.`);
+      return;
+    }
+    if (!(currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId)) {
+      handlePlayTrack(track, contextList);
+    }
+    setIsExpandedCoverOpen(true);
+  }, [currentTrack, handlePlayTrack, cachedYoutubeIds, isOfflineMode]);
 
   const handlePlayPause = useCallback(() => {
     unlockAudioKeepAlive();
@@ -460,7 +475,6 @@ export default function App() {
   }, [currentTrack, isPlaying, queue, cachedYoutubeIds, isOfflineMode, handlePlayTrack]);
 
   const handleNext = useCallback(() => {
-    // If sleep timer is set to "End of track", stop playback on completion
     if (sleepTimerMinutes === -1) {
       setIsPlaying(false);
       setSleepTimerMinutes(null);
@@ -585,12 +599,10 @@ export default function App() {
       setIsPlaying(false);
     } else if (state === 'ended') {
       if (repeatMode === 'one') {
-        // Repeat One Track: Replay immediately from beginning
         setSeekTarget(0);
         setCurrentTime(0);
         setIsPlaying(true);
       } else {
-        // Repeat Queue or Off: Auto-play next song in queue
         handleNext();
       }
     }
@@ -599,7 +611,6 @@ export default function App() {
   const fallbackAttemptsRef = useRef<Record<string, number>>({});
 
   const handleTrackError = useCallback(async (failedTrack: Track, errorCode: number) => {
-    // Codes 100, 101, 150 indicate video unavailable or embedding restricted by uploader
     if ((errorCode === 100 || errorCode === 101 || errorCode === 150) && !isOfflineMode) {
       failedFallbackIdsRef.current.add(failedTrack.youtubeId);
       const attempts = fallbackAttemptsRef.current[failedTrack.id] || 0;
@@ -629,7 +640,6 @@ export default function App() {
 
   const lastTimeRef = useRef(0);
   const handleTimeUpdate = useCallback((curr: number, dur: number) => {
-    // Only dispatch React state update if audio has progressed by at least 180ms or jumped
     if (Math.abs(curr - lastTimeRef.current) >= 0.18 || Math.abs(curr - lastTimeRef.current) > 1.5) {
       lastTimeRef.current = curr;
       setCurrentTime(curr);
@@ -682,11 +692,75 @@ export default function App() {
     }
   }, []);
 
+  const renderTrackCard = (track: Track, contextList: Track[]) => {
+    const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
+    const isCached = cachedYoutubeIds.has(track.youtubeId);
+    const isOfflineDisabled = isOfflineMode && !isCached;
+
+    return (
+      <div
+        key={track.id}
+        onClick={() => handleInspectTrack(track, contextList)}
+        className={`card-interactive group bg-[#1B1815] hover:bg-[#24201B] p-3 rounded-2xl border transition-colors flex flex-col relative ${
+          isOfflineDisabled ? 'opacity-45 cursor-not-allowed border-[#EAE0D0]/[0.04]' : 'cursor-pointer border-[#EAE0D0]/[0.07] hover:border-[#EAE0D0]/16'
+        } ${isCurrent && isPlaying ? 'border-[#D8C3A5]/50 bg-[#24201B]' : ''}`}
+      >
+        <div className="relative mb-3 aspect-video sm:aspect-[4/3] rounded-xl overflow-hidden bg-[#12100E]">
+          <CoverImage
+            src={track.thumbnail}
+            alt={track.title}
+            youtubeId={track.youtubeId}
+            loading="eager"
+            className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+          <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-medium text-[#E4DDD2] truncate">
+              {track.country || 'World'}
+            </span>
+            {!isOfflineDisabled && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (isCurrent && isPlaying) {
+                    handlePlayPause();
+                  } else {
+                    handlePlayTrack(track, contextList);
+                  }
+                }}
+                aria-label={`Play ${track.title}`}
+                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                  isCurrent
+                    ? 'bg-[#D8C3A5] text-[#12100E]'
+                    : 'bg-black/75 text-[#F5F0E8] hover:bg-[#D8C3A5] hover:text-[#12100E]'
+                }`}
+              >
+                {isCurrent && isPlaying ? (
+                  <Pause className="w-3.5 h-3.5 fill-current" />
+                ) : (
+                  <Play className="w-3.5 h-3.5 fill-current translate-x-0.2" />
+                )}
+              </button>
+            )}
+          </div>
+        </div>
+        <div className={`font-semibold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#EDE0CC]' : 'text-[#F5F0E8]'}`}>
+          {track.title}
+        </div>
+        <div className="text-[11px] sm:text-xs text-[#9E9384] truncate mt-0.5 tabular-nums">
+          {track.artist} · {track.durationFormatted}
+          {isOfflineDisabled ? ' · Online only' : isCached ? ' · Cached' : ''}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-black text-white font-sans antialiased">
-      {/* Top Application Body (Sidebar + Main Content + Side Panels) */}
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#12100E] text-[#F5F0E8] font-sans antialiased">
+      {/* Application Workspace */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Spotify-style Left Sidebar */}
+        {/* Architectural Studio Left Rail */}
         <Sidebar
           currentView={currentView}
           selectedPlaylistId={selectedPlaylistId}
@@ -704,9 +778,8 @@ export default function App() {
           onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
         />
 
-        {/* Central Content Panel */}
-        <div className="flex-1 flex flex-col bg-[#121212] overflow-hidden relative">
-          {/* Top Sticky Header */}
+        {/* Central Content Viewport */}
+        <div className="flex-1 flex flex-col bg-[#12100E] overflow-hidden relative">
           <Header
             currentView={currentView}
             searchQuery={searchQuery}
@@ -747,303 +820,538 @@ export default function App() {
             }}
           />
 
-          {/* Scrollable View Area with CSS View Transition Animation */}
           <main
             ref={mainContentRef}
-            className="flex-1 overflow-y-auto px-3 sm:px-4 md:px-6 py-4 sm:py-6 scrollbar-thin scrollbar-thumb-neutral-700"
+            className="flex-1 overflow-y-auto px-3 sm:px-5 md:px-7 py-4 sm:py-6 scrollbar-thin"
           >
-            <div
-              key={viewKey}
-              className="animate-view-fade-slide w-full min-h-full"
-            >
-              {/* VIEW 1: PLAYLIST OR LIKED SONGS VIEW */}
-            {currentView === 'playlist' && activePlaylist && (
-              <div className="space-y-5 sm:space-y-6">
-                {/* Playlist Banner */}
-                <div className="flex flex-col md:flex-row items-center md:items-end text-center md:text-left gap-4 sm:gap-6 bg-gradient-to-b from-neutral-800/80 to-[#121212] p-4 sm:p-6 rounded-2xl border border-neutral-800 shadow-xl">
-                  <CoverImage
-                    src={activePlaylist.coverImage}
-                    alt={activePlaylist.name}
-                    youtubeId={activePlaylist.tracks[0]?.youtubeId}
-                    loading="eager"
-                    className="w-36 h-36 sm:w-44 sm:h-44 md:w-48 md:h-48 rounded-xl object-cover shadow-2xl shadow-black/80 shrink-0"
-                  />
-                  <div className="flex-1 space-y-2 min-w-0 w-full">
-                    <div className="flex items-center justify-center md:justify-start gap-2">
-                      <span className="text-xs font-bold uppercase tracking-wider text-neutral-400">
-                        {activePlaylist.isCustom ? 'Custom Playlist' : 'Playlist'}
-                      </span>
-                      <span className="text-[10px] bg-[#1db954] text-black font-extrabold px-2 py-0.5 rounded-full">
-                        {activePlaylist.isCustom ? 'CUSTOM MIX' : 'CURATED MIX'}
-                      </span>
-                    </div>
-                    <h1 className="text-2xl sm:text-3xl md:text-5xl font-extrabold text-white tracking-tight break-words">
-                      {activePlaylist.name}
-                    </h1>
-                    <p className="text-xs sm:text-sm text-neutral-300 max-w-2xl mx-auto md:mx-0">
-                      {activePlaylist.description}
-                    </p>
-                    <div className="flex items-center justify-center md:justify-start gap-2 text-xs text-neutral-400 pt-1">
-                      <span className="font-semibold text-white">SpotiTube Collection</span>
-                      <span>•</span>
-                      <span>{activePlaylist.tracks.length} songs</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Playlist Actions */}
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={() => {
-                      const playable = filterTracksForOffline(activePlaylist.tracks, cachedYoutubeIds, isOfflineMode);
-                      if (playable.length > 0) {
-                        handlePlayTrack(playable[0], activePlaylist.tracks);
-                      } else if (activePlaylist.tracks.length > 0) {
-                        handlePlayTrack(activePlaylist.tracks[0], activePlaylist.tracks);
-                      }
-                    }}
-                    aria-label={`Play ${activePlaylist.name}`}
-                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#1db954] hover:bg-[#1ed760] text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl shadow-[#1db954]/20 cursor-pointer"
-                  >
-                    <Play className="w-5 h-5 sm:w-6 sm:h-6 fill-current translate-x-0.5" />
-                  </button>
-                </div>
-
-                {/* Track List */}
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                    <span className="w-5 sm:w-6 text-center">#</span>
-                    <span className="flex-1">Title</span>
-                    <span className="hidden md:block w-1/4">Album</span>
-                    <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
-                  </div>
-
-                  {activePlaylist.tracks.length === 0 ? (
-                    <div className="text-center py-12 text-neutral-400 text-sm space-y-2">
-                      <p>No tracks in this playlist yet.</p>
-                      <p className="text-xs text-neutral-500">
-                        Search for any song or browse Home, then click "..." on any track to add it here!
+            <div key={viewKey} className="animate-view-fade-slide w-full max-w-7xl mx-auto min-h-full">
+              {/* VIEW 1: PLAYLIST OR SAVED FAVORITES */}
+              {currentView === 'playlist' && activePlaylist && (
+                <div className="space-y-6">
+                  <div className="flex flex-col md:flex-row items-center md:items-end text-center md:text-left gap-5 bg-[#1B1815] p-5 sm:p-6 rounded-2xl border border-[#EAE0D0]/[0.08]">
+                    <CoverImage
+                      src={activePlaylist.coverImage}
+                      alt={activePlaylist.name}
+                      youtubeId={activePlaylist.tracks[0]?.youtubeId}
+                      loading="eager"
+                      className="w-36 h-36 sm:w-44 sm:h-44 rounded-xl object-cover shadow-xl shrink-0"
+                    />
+                    <div className="flex-1 space-y-2 min-w-0 w-full">
+                      <div className="text-xs font-medium text-[#DFCCB0]">
+                        {activePlaylist.isCustom ? 'Custom Mix' : activePlaylist.regionLabel || 'Curated Collection'}
+                      </div>
+                      <h1 className="font-display text-2xl sm:text-4xl font-bold text-[#F5F0E8] tracking-tight text-balance">
+                        {activePlaylist.name}
+                      </h1>
+                      <p className="text-xs sm:text-sm text-[#C8BEB0] max-w-2xl mx-auto md:mx-0">
+                        {activePlaylist.description}
                       </p>
+                      <div className="flex items-center justify-center md:justify-start gap-2 text-xs text-[#9E9384] pt-1 tabular-nums">
+                        <span>{activePlaylist.tracks.length} tracks</span>
+                        <span aria-hidden="true">·</span>
+                        <span>Worldwide Soundstage</span>
+                      </div>
                     </div>
-                  ) : (
-                    activePlaylist.tracks.map((track, idx) => {
-                      const isCached = cachedYoutubeIds.has(track.youtubeId);
-                      return (
-                        <TrackRow
-                          key={`${track.id}-${idx}`}
-                          track={track}
-                          index={idx}
-                          isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
-                          isPlaying={isPlaying}
-                          isLiked={likedTrackIds.has(track.id)}
-                          isCached={isCached}
-                          isOfflineDisabled={isOfflineMode && !isCached}
-                          customPlaylists={customPlaylists}
-                          onPlay={(t) => handlePlayTrack(t, activePlaylist.tracks)}
-                          onToggleLike={handleToggleLike}
-                          onAddToQueue={handleAddToQueue}
-                          onPlayNext={handlePlayNext}
-                          onAddToPlaylist={handleAddToPlaylist}
-                          onCacheTrack={handleCacheTrack}
-                        />
-                      );
-                    })
-                  )}
-                </div>
-              </div>
-            )}
+                  </div>
 
-            {/* VIEW 2: SEARCH RESULTS & RECENT SEARCHES VIEW */}
-            {currentView === 'search' && (
-              <div className="space-y-6">
-                {/* Search Header Info */}
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <h1 className="text-xl sm:text-2xl font-bold text-white break-words">
-                      {searchQuery ? `Search Results for "${searchQuery}"` : 'Search & Discover'}
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const playable = filterTracksForOffline(activePlaylist.tracks, cachedYoutubeIds, isOfflineMode);
+                        if (playable.length > 0) {
+                          handlePlayTrack(playable[0], activePlaylist.tracks);
+                        } else if (activePlaylist.tracks.length > 0) {
+                          handlePlayTrack(activePlaylist.tracks[0], activePlaylist.tracks);
+                        }
+                      }}
+                      aria-label={`Play ${activePlaylist.name}`}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#D8C3A5] hover:bg-[#E4D3BA] text-[#12100E] font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      <span>Play Collection</span>
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#9E9384] border-b border-[#EAE0D0]/[0.07]">
+                      <span className="w-6 text-center shrink-0">#</span>
+                      <span className="flex-1 min-w-0">Title</span>
+                      <span className="hidden md:block w-1/4">Album</span>
+                      <span className="hidden sm:block w-24 shrink-0" aria-hidden="true" />
+                      <span className="w-12 text-right shrink-0"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
+                    </div>
+
+                    {activePlaylist.tracks.length === 0 ? (
+                      <div className="text-center py-12 text-[#9E9384] text-sm space-y-2">
+                        <p>No tracks in this playlist yet.</p>
+                        <p className="text-xs text-[#8F8476]">
+                          Search for any song worldwide, then open options on a track to add it here.
+                        </p>
+                      </div>
+                    ) : (
+                      activePlaylist.tracks.map((track, idx) => {
+                        const isCached = cachedYoutubeIds.has(track.youtubeId);
+                        return (
+                          <TrackRow
+                            key={`${track.id}-${idx}`}
+                            track={track}
+                            index={idx}
+                            isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
+                            isPlaying={isPlaying}
+                            isLiked={likedTrackIds.has(track.id)}
+                            isCached={isCached}
+                            isOfflineDisabled={isOfflineMode && !isCached}
+                            customPlaylists={customPlaylists}
+                            onPlay={(t) => handlePlayTrack(t, activePlaylist.tracks)}
+                            onInspectTrack={(t) => handleInspectTrack(t, activePlaylist.tracks)}
+                            onToggleLike={handleToggleLike}
+                            onAddToQueue={handleAddToQueue}
+                            onPlayNext={handlePlayNext}
+                            onAddToPlaylist={handleAddToPlaylist}
+                            onCacheTrack={handleCacheTrack}
+                          />
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* VIEW 2: GLOBAL SEARCH & COUNTRY EXPLORER */}
+              {currentView === 'search' && (
+                <div className="space-y-6">
+                  <div>
+                    <h1 className="font-display text-xl sm:text-2xl font-bold text-[#F5F0E8] break-words">
+                      {searchQuery ? `Results for "${searchQuery}"` : 'Explore Any Country & Genre'}
                     </h1>
                     {searchStatusMsg && searchQuery && (
-                      <p className="text-xs text-[#1db954] mt-1 font-mono">
+                      <p className="text-xs text-[#DFCCB0] mt-1 font-mono tabular-nums">
                         {searchStatusMsg}
                       </p>
                     )}
                   </div>
-                </div>
 
-                {/* Case 1: When user has not typed a query, show Cached Tracks (if Offline), Recent Searches & Browse categories */}
-                {!searchQuery.trim() ? (
-                  <div className="space-y-6 sm:space-y-8">
-                    {isOfflineMode && (
-                      <section className="space-y-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
-                            Cached Tracks (Offline)
-                          </h2>
-                          <span className="text-xs font-mono text-amber-300 bg-amber-500/15 px-2.5 py-0.5 rounded-full">
-                            {cachedTracksList.length} cached
-                          </span>
-                        </div>
-                        {cachedTracksList.length === 0 ? (
-                          <div className="rounded-xl bg-neutral-900/70 border border-neutral-800 p-5 text-sm text-neutral-300">
-                            No cached tracks yet. Play any track or choose &ldquo;Cache for Offline&rdquo; while connected to listen without internet.
+                  {!searchQuery.trim() ? (
+                    <div className="space-y-7">
+                      {isOfflineMode && (
+                        <section className="space-y-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <h2 className="font-display text-lg font-bold text-[#F5F0E8]">
+                              Cached Tracks (Offline)
+                            </h2>
+                            <span className="text-xs font-mono tabular-nums text-[#DFCCB0]">
+                              {cachedTracksList.length} saved
+                            </span>
                           </div>
-                        ) : (
-                          <div className="space-y-1">
-                            {cachedTracksList.map((track, idx) => (
+                          {cachedTracksList.length === 0 ? (
+                            <div className="rounded-xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 text-sm text-[#C8BEB0]">
+                              No cached tracks yet. Play any track while online to save it automatically.
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              {cachedTracksList.map((track, idx) => (
+                                <TrackRow
+                                  key={`cached-${track.youtubeId}-${idx}`}
+                                  track={track}
+                                  index={idx}
+                                  isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
+                                  isPlaying={isPlaying}
+                                  isLiked={likedTrackIds.has(track.id)}
+                                  isCached
+                                  isOfflineDisabled={false}
+                                  customPlaylists={customPlaylists}
+                                  onPlay={(t) => handlePlayTrack(t, cachedTracksList)}
+                                  onInspectTrack={(t) => handleInspectTrack(t, cachedTracksList)}
+                                  onToggleLike={handleToggleLike}
+                                  onAddToQueue={handleAddToQueue}
+                                  onPlayNext={handlePlayNext}
+                                  onAddToPlaylist={handleAddToPlaylist}
+                                  onCacheTrack={handleCacheTrack}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </section>
+                      )}
+
+                      {recentSearches.length > 0 && (
+                        <RecentSearches
+                          searches={recentSearches}
+                          onSelectSearch={handleSelectRecentSearch}
+                          onRemoveSearch={handleRemoveRecentSearch}
+                          onClearAll={handleClearAllRecentSearches}
+                        />
+                      )}
+
+                      {/* Browse By Country Worldwide */}
+                      <section className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+                            Browse Music by Country
+                          </h2>
+                          <span className="text-xs text-[#9E9384]">Tap any country to stream</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                          {WORLD_COUNTRY_PRESETS.map((country) => (
+                            <button
+                              type="button"
+                              key={country.id}
+                              onClick={() => handleSelectRecentSearch(country.query)}
+                              className="card-interactive text-left p-3.5 rounded-xl bg-[#1B1815] hover:bg-[#24201B] border border-[#EAE0D0]/[0.08] hover:border-[#D8C3A5]/45 cursor-pointer flex flex-col justify-between min-h-[84px]"
+                            >
+                              <div className="flex items-center justify-between gap-2 w-full">
+                                <span className="font-display font-bold text-sm text-[#F5F0E8] truncate">
+                                  {country.name}
+                                </span>
+                                <ArrowRight className="w-3.5 h-3.5 text-[#DFCCB0] shrink-0" />
+                              </div>
+                              <span className="text-[11px] text-[#9E9384] truncate mt-2">
+                                {country.styleHint}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+
+                      {/* Global Top Picks */}
+                      <section className="space-y-3">
+                        <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+                          Worldwide Rotation
+                        </h2>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#9E9384] border-b border-[#EAE0D0]/[0.07]">
+                            <span className="w-6 text-center shrink-0">#</span>
+                            <span className="flex-1 min-w-0">Title</span>
+                            <span className="hidden md:block w-1/4">Album</span>
+                            <span className="hidden sm:block w-24 shrink-0" aria-hidden="true" />
+                            <span className="w-12 text-right shrink-0"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
+                          </div>
+                          {CURATED_TRACKS.slice(0, 10).map((track, idx) => {
+                            const isCached = cachedYoutubeIds.has(track.youtubeId);
+                            return (
                               <TrackRow
-                                key={`cached-${track.youtubeId}-${idx}`}
+                                key={`${track.id}-${idx}`}
                                 track={track}
                                 index={idx}
                                 isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
                                 isPlaying={isPlaying}
                                 isLiked={likedTrackIds.has(track.id)}
-                                isCached
-                                isOfflineDisabled={false}
+                                isCached={isCached}
+                                isOfflineDisabled={isOfflineMode && !isCached}
                                 customPlaylists={customPlaylists}
-                                onPlay={(t) => handlePlayTrack(t, cachedTracksList)}
+                                onPlay={(t) => handlePlayTrack(t, CURATED_TRACKS)}
+                                onInspectTrack={(t) => handleInspectTrack(t, CURATED_TRACKS)}
                                 onToggleLike={handleToggleLike}
                                 onAddToQueue={handleAddToQueue}
                                 onPlayNext={handlePlayNext}
                                 onAddToPlaylist={handleAddToPlaylist}
                                 onCacheTrack={handleCacheTrack}
                               />
-                            ))}
-                          </div>
-                        )}
+                            );
+                          })}
+                        </div>
                       </section>
-                    )}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {recentSearches.length > 0 && (
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs text-[#9E9384]">
+                          <span className="font-semibold text-[#8F8476] text-[11px] shrink-0">Recent:</span>
+                          {recentSearches.map((term) => (
+                            <button
+                              type="button"
+                              key={term}
+                              onClick={() => handleSelectRecentSearch(term)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 transition-colors cursor-pointer border ${
+                                searchQuery.toLowerCase() === term.toLowerCase()
+                                  ? 'bg-[#D8C3A5] text-[#12100E] border-[#D8C3A5] font-bold'
+                                  : 'bg-[#1B1815] text-[#C8BEB0] border-[#EAE0D0]/10 hover:bg-[#24201B] hover:text-[#F5F0E8]'
+                              }`}
+                            >
+                              {term}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
-                    {/* Persistent Recent Searches Section */}
-                    {recentSearches.length > 0 && (
-                      <RecentSearches
-                        searches={recentSearches}
-                        onSelectSearch={handleSelectRecentSearch}
-                        onRemoveSearch={handleRemoveRecentSearch}
-                        onClearAll={handleClearAllRecentSearches}
+                      {isSearching ? (
+                        <div className="flex items-center justify-center py-16 text-[#9E9384] gap-3">
+                          <div className="w-5 h-5 border-2 border-[#D8C3A5] border-t-transparent rounded-full animate-spin" />
+                          <span className="text-sm">Searching global music catalog...</span>
+                        </div>
+                      ) : searchResults.length === 0 ? (
+                        <div className="text-center py-16 text-[#9E9384] space-y-2">
+                          <p className="text-lg font-bold text-[#F5F0E8]">No results found for &ldquo;{searchQuery}&rdquo;</p>
+                          <p className="text-sm">
+                            {isOfflineMode
+                              ? 'You are offline. Only cached tracks are searchable until your connection returns.'
+                              : 'Try another song, artist, country, or genre.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#9E9384] border-b border-[#EAE0D0]/[0.07]">
+                            <span className="w-6 text-center shrink-0">#</span>
+                            <span className="flex-1 min-w-0">Title</span>
+                            <span className="hidden md:block w-1/4">Release</span>
+                            <span className="hidden sm:block w-24 shrink-0" aria-hidden="true" />
+                            <span className="w-12 text-right shrink-0"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
+                          </div>
+
+                          {searchResults.map((track, idx) => {
+                            const isCached = cachedYoutubeIds.has(track.youtubeId);
+                            return (
+                              <TrackRow
+                                key={`${track.id}-${idx}`}
+                                track={track}
+                                index={idx}
+                                isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
+                                isPlaying={isPlaying}
+                                isLiked={likedTrackIds.has(track.id)}
+                                isCached={isCached}
+                                isOfflineDisabled={isOfflineMode && !isCached}
+                                customPlaylists={customPlaylists}
+                                onPlay={(t) => {
+                                  handleAddRecentSearch(searchQuery);
+                                  handlePlayTrack(t, searchResults);
+                                }}
+                                onInspectTrack={(t) => {
+                                  handleAddRecentSearch(searchQuery);
+                                  handleInspectTrack(t, searchResults);
+                                }}
+                                onToggleLike={handleToggleLike}
+                                onAddToQueue={handleAddToQueue}
+                                onPlayNext={handlePlayNext}
+                                onAddToPlaylist={handleAddToPlaylist}
+                                onCacheTrack={handleCacheTrack}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* VIEW 3: EDITORIAL GLOBAL HOME DISCOVERY */}
+              {currentView === 'home' && (
+                <div className="space-y-8">
+                  {/* Editorial Soundstage Hero Banner */}
+                  <section className="relative rounded-2xl overflow-hidden border border-[#EAE0D0]/[0.08] bg-[#1B1815]">
+                    <div className="relative min-h-[210px] sm:min-h-[240px] flex flex-col justify-end p-5 sm:p-7">
+                      <img
+                        src={heroWorldStudio}
+                        alt="Analog mastering turntable and brushed studio console"
+                        referrerPolicy="no-referrer"
+                        className="absolute inset-0 w-full h-full object-cover opacity-55 sepia-[.15]"
                       />
-                    )}
-
-                    {/* Spotify-style Browse All Categories */}
-                    <section className="space-y-3">
-                      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Browse All Categories</h2>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-                        <div
-                          onClick={() => handleSelectRecentSearch('Moroccan Chaabi')}
-                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-emerald-600 to-teal-900 cursor-pointer flex flex-col justify-between shadow-md"
-                        >
-                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Moroccan Chaabi</span>
-                          <span className="text-[10px] sm:text-[11px] text-emerald-200 truncate">Daoudi, Senhaji, Stati</span>
+                      <div className="absolute inset-0 bg-gradient-to-r from-[#12100E] via-[#12100E]/88 to-[#12100E]/35" />
+                      <div className="relative z-10 max-w-2xl space-y-3">
+                        <div className="text-xs font-medium text-[#DFCCB0] flex items-center gap-2">
+                          <Globe2 className="w-3.5 h-3.5" />
+                          <span>World Music Soundstage · Americas · Europe · Africa · Asia</span>
                         </div>
-                        <div
-                          onClick={() => handleSelectRecentSearch('Rai Classics')}
-                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-amber-600 to-rose-900 cursor-pointer flex flex-col justify-between shadow-md"
-                        >
-                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Rai Golden Era</span>
-                          <span className="text-[10px] sm:text-[11px] text-amber-200 truncate">Khaled, Mami, Hasni</span>
-                        </div>
-                        <div
-                          onClick={() => handleSelectRecentSearch('Maghreb Rap 7elmetado')}
-                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-purple-700 to-rose-900 cursor-pointer flex flex-col justify-between shadow-md"
-                        >
-                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Maghreb Rap & Trap</span>
-                          <span className="text-[10px] sm:text-[11px] text-purple-200 truncate">ElGrandeToto, Dizzy Dros</span>
-                        </div>
-                        <div
-                          onClick={() => handleSelectRecentSearch('Top Worldwide Hits')}
-                          className="card-interactive h-24 sm:h-28 rounded-xl p-3 sm:p-4 bg-gradient-to-br from-blue-600 to-indigo-950 cursor-pointer flex flex-col justify-between shadow-md"
-                        >
-                          <span className="font-extrabold text-white text-sm sm:text-base leading-tight">Global Hits</span>
-                          <span className="text-[10px] sm:text-[11px] text-blue-200 truncate">Chart Favorites</span>
-                        </div>
-                      </div>
-                    </section>
-
-                    {/* Suggested Popular Tracks */}
-                    <section className="space-y-3">
-                      <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">Popular Suggestions</h2>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                          <span className="w-5 sm:w-6 text-center">#</span>
-                          <span className="flex-1">Title</span>
-                          <span className="hidden md:block w-1/4">Genre</span>
-                          <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
-                        </div>
-                        {CURATED_TRACKS.slice(0, 8).map((track, idx) => {
-                          const isCached = cachedYoutubeIds.has(track.youtubeId);
-                          return (
-                            <TrackRow
-                              key={`${track.id}-${idx}`}
-                              track={track}
-                              index={idx}
-                              isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
-                              isPlaying={isPlaying}
-                              isLiked={likedTrackIds.has(track.id)}
-                              isCached={isCached}
-                              isOfflineDisabled={isOfflineMode && !isCached}
-                              customPlaylists={customPlaylists}
-                              onPlay={(t) => handlePlayTrack(t, CURATED_TRACKS)}
-                              onToggleLike={handleToggleLike}
-                              onAddToQueue={handleAddToQueue}
-                              onPlayNext={handlePlayNext}
-                              onAddToPlaylist={handleAddToPlaylist}
-                              onCacheTrack={handleCacheTrack}
-                            />
-                          );
-                        })}
-                      </div>
-                    </section>
-                  </div>
-                ) : (
-                  /* Case 2: When user is actively querying */
-                  <div className="space-y-4">
-                    {/* Quick switch between recent searches while browsing */}
-                    {recentSearches.length > 0 && (
-                      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs text-neutral-400">
-                        <span className="font-semibold text-neutral-500 uppercase tracking-wider text-[10px] shrink-0">Recent:</span>
-                        {recentSearches.map((term) => (
+                        <h1 className="font-display text-2xl sm:text-4xl font-bold text-[#F5F0E8] tracking-tight text-balance">
+                          Global sounds from every corner of the world
+                        </h1>
+                        <p className="text-xs sm:text-sm text-[#C8BEB0] leading-relaxed max-w-xl">
+                          Discover chart hits and regional scenes across 15+ countries — stream instantly or pick any nation below.
+                        </p>
+                        <div className="flex flex-wrap items-center gap-3 pt-1">
                           <button
-                            key={term}
-                            onClick={() => handleSelectRecentSearch(term)}
-                            className={`px-3 py-1 rounded-full text-xs font-medium shrink-0 transition-colors cursor-pointer border ${
-                              searchQuery.toLowerCase() === term.toLowerCase()
-                                ? 'bg-white text-black border-white font-bold'
-                                : 'bg-[#242424] text-neutral-300 border-neutral-800 hover:bg-[#303030] hover:text-white'
-                            }`}
+                            type="button"
+                            onClick={() => {
+                              const playable = filterTracksForOffline(CURATED_TRACKS, cachedYoutubeIds, isOfflineMode);
+                              const first = playable[0] || CURATED_TRACKS[0];
+                              if (first) handlePlayTrack(first, CURATED_TRACKS);
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#D8C3A5] hover:bg-[#E4D3BA] text-[#12100E] font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap"
                           >
-                            {term}
+                            <Play className="w-4 h-4 fill-current" />
+                            <span>Play World Rotation</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleNavigate('search')}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#EAE0D0]/[0.08] hover:bg-[#EAE0D0]/[0.14] text-[#F5F0E8] font-semibold text-xs sm:text-sm border border-[#EAE0D0]/12 transition-colors cursor-pointer whitespace-nowrap"
+                          >
+                            <Compass className="w-4 h-4 text-[#DFCCB0]" />
+                            <span>Browse Any Country</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  {/* Quick Country Explorer Strip */}
+                  {selectedGenre === 'all' && (
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+                            Explore by Country
+                          </h2>
+                          <p className="text-xs text-[#9E9384] mt-0.5">
+                            Pick any country to load live tracks from its scene
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                        {WORLD_COUNTRY_PRESETS.map((country) => (
+                          <button
+                            type="button"
+                            key={country.id}
+                            onClick={() => handleSelectRecentSearch(country.query)}
+                            className="card-interactive text-left px-3.5 py-3 rounded-xl bg-[#1B1815] hover:bg-[#24201B] border border-[#EAE0D0]/[0.08] hover:border-[#D8C3A5]/45 cursor-pointer flex flex-col justify-between min-h-[76px]"
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-display font-bold text-sm text-[#F5F0E8] truncate">
+                                {country.name}
+                              </span>
+                              <ArrowRight className="w-3.5 h-3.5 text-[#DFCCB0] shrink-0" />
+                            </div>
+                            <span className="text-[11px] text-[#9E9384] mt-1.5 truncate">
+                              {country.styleHint}
+                            </span>
                           </button>
                         ))}
                       </div>
-                    )}
+                    </section>
+                  )}
 
-                    {isSearching ? (
-                      <div className="flex items-center justify-center py-16 text-neutral-400 gap-3">
-                        <div className="w-5 h-5 border-2 border-[#1db954] border-t-transparent rounded-full animate-spin" />
-                        <span className="text-sm">Searching live music catalog...</span>
+                  {/* Curated World Collections */}
+                  {selectedGenre === 'all' && (
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+                          Curated World Mixes
+                        </h2>
                       </div>
-                    ) : searchResults.length === 0 ? (
-                      <div className="text-center py-16 text-neutral-400 space-y-2">
-                        <p className="text-lg font-bold text-white">No results found for "{searchQuery}"</p>
-                        <p className="text-sm">
-                          {isOfflineMode
-                            ? 'You are currently offline. Only cached tracks are searchable until your connection returns.'
-                            : 'Please check your spelling or try searching for another artist or genre.'}
-                        </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {allPlaylists.slice(0, 5).map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              setSelectedPlaylistId(item.id);
+                              setCurrentView('playlist');
+                            }}
+                            className="card-interactive group flex items-center gap-3.5 bg-[#1B1815] hover:bg-[#24201B] border border-[#EAE0D0]/[0.08] hover:border-[#EAE0D0]/16 p-2.5 rounded-2xl cursor-pointer"
+                          >
+                            <CoverImage
+                              src={item.coverImage}
+                              alt={item.name}
+                              youtubeId={item.tracks[0]?.youtubeId}
+                              loading="eager"
+                              className="w-16 h-16 rounded-xl object-cover shrink-0 bg-[#12100E]"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-display font-bold text-sm text-[#F5F0E8] truncate">
+                                {item.name}
+                              </div>
+                              <div className="text-xs text-[#9E9384] truncate mt-0.5 tabular-nums">
+                                {item.regionLabel || 'Custom'} · {item.tracks.length} tracks
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const playable = filterTracksForOffline(item.tracks, cachedYoutubeIds, isOfflineMode);
+                                const first = playable[0] || item.tracks[0];
+                                if (first) handlePlayTrack(first, item.tracks);
+                              }}
+                              aria-label={`Play ${item.name}`}
+                              className="w-9 h-9 rounded-xl bg-[#EAE0D0]/[0.06] group-hover:bg-[#D8C3A5] text-[#E4DDD2] group-hover:text-[#12100E] flex items-center justify-center transition-colors shrink-0 mr-1 cursor-pointer"
+                            >
+                              <Play className="w-4 h-4 fill-current translate-x-0.2" />
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2.5 sm:gap-4 px-2 sm:px-4 py-2 text-xs font-bold text-neutral-400 uppercase tracking-wider border-b border-neutral-800">
-                          <span className="w-5 sm:w-6 text-center">#</span>
-                          <span className="flex-1">Title</span>
-                          <span className="hidden md:block w-1/4">Source / Album</span>
-                          <span className="w-12 text-right"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
+                    </section>
+                  )}
+
+                  {/* Recently Cached / Frequently Played */}
+                  {frequentTracks.length > 0 && selectedGenre === 'all' && (
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+                            Recently Played &amp; Cached
+                          </h2>
+                          <p className="text-xs text-[#9E9384] mt-0.5">
+                            Saved locally for instant playback · {frequentTracks.length} ready offline
+                          </p>
                         </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        {frequentTracks.map((track) => renderTrackCard(track, frequentTracks))}
+                      </div>
+                    </section>
+                  )}
 
-                        {searchResults.map((track, idx) => {
+                  {/* Regional Showcases (when All Countries active) OR Filtered Region Table */}
+                  {selectedGenre === 'all' ? (
+                    <div className="space-y-8">
+                      {REGION_SECTIONS.map((section) => {
+                        const regionTracks = CURATED_TRACKS.filter(t => t.region === section.id);
+                        return (
+                          <section key={section.id} className="space-y-3">
+                            <div className="flex items-end justify-between gap-3">
+                              <div className="min-w-0">
+                                <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+                                  {section.title}
+                                </h2>
+                                <p className="text-xs text-[#9E9384] mt-0.5 truncate">
+                                  {section.subtitle}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedPlaylistId(section.playlistId);
+                                  setCurrentView('playlist');
+                                }}
+                                className="text-xs font-semibold text-[#DFCCB0] hover:text-[#EDE0CC] transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                              >
+                                View collection
+                              </button>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                              {regionTracks.map((track) => renderTrackCard(track, regionTracks))}
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <section className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+                          {selectedGenre === 'global'
+                            ? 'World Charts'
+                            : `${selectedGenre.charAt(0).toUpperCase()}${selectedGenre.slice(1)} Selection`}
+                        </h2>
+                        <span className="text-xs text-[#9E9384] font-mono tabular-nums">
+                          {displayedTracks.length} tracks
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#9E9384] border-b border-[#EAE0D0]/[0.07]">
+                          <span className="w-6 text-center shrink-0">#</span>
+                          <span className="flex-1 min-w-0">Title</span>
+                          <span className="hidden md:block w-1/4">Album</span>
+                          <span className="hidden sm:block w-24 shrink-0" aria-hidden="true" />
+                          <span className="w-12 text-right shrink-0"><Clock className="w-3.5 h-3.5 ml-auto" /></span>
+                        </div>
+                        {displayedTracks.map((track, idx) => {
                           const isCached = cachedYoutubeIds.has(track.youtubeId);
                           return (
                             <TrackRow
-                              key={`${track.id}-${idx}`}
+                              key={track.id}
                               track={track}
                               index={idx}
                               isCurrent={currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId}
@@ -1052,10 +1360,8 @@ export default function App() {
                               isCached={isCached}
                               isOfflineDisabled={isOfflineMode && !isCached}
                               customPlaylists={customPlaylists}
-                              onPlay={(t) => {
-                                handleAddRecentSearch(searchQuery);
-                                handlePlayTrack(t, searchResults);
-                              }}
+                              onPlay={(t) => handlePlayTrack(t, displayedTracks)}
+                              onInspectTrack={(t) => handleInspectTrack(t, displayedTracks)}
                               onToggleLike={handleToggleLike}
                               onAddToQueue={handleAddToQueue}
                               onPlayNext={handlePlayNext}
@@ -1065,532 +1371,80 @@ export default function App() {
                           );
                         })}
                       </div>
-                    )}
+                    </section>
+                  )}
+                </div>
+              )}
+
+              {/* VIEW 4: LIBRARY VIEW */}
+              {currentView === 'library' && (
+                <div className="space-y-5 sm:space-y-6">
+                  <div className="flex items-center justify-between gap-2">
+                    <h1 className="font-display text-xl sm:text-2xl font-bold text-[#F5F0E8]">Your Music Library</h1>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatePlaylistOpen(true)}
+                      className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#D8C3A5] hover:bg-[#E4D3BA] text-[#12100E] font-bold text-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                    >
+                      <PlusSquare className="w-4 h-4" />
+                      <span>Create Playlist</span>
+                    </button>
                   </div>
-                )}
-              </div>
-            )}
 
-            {/* VIEW 3: HOME DASHBOARD */}
-            {currentView === 'home' && (
-              <div className="space-y-7 sm:space-y-8">
-                {/* Greeting & Quick Access Cards */}
-                <div>
-                  <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-white tracking-tight mb-3 sm:mb-4">
-                    {greeting}
-                  </h1>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    <div
+                      onClick={() => {
+                        setSelectedPlaylistId('liked');
+                        setCurrentView('playlist');
+                      }}
+                      className="card-interactive p-5 rounded-2xl bg-[#1B1815] hover:bg-[#24201B] border border-[#D8C3A5]/30 cursor-pointer flex items-center gap-4"
+                    >
+                      <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0">
+                        <CoverImage
+                          src={DEFAULT_FAVORITES_COVER}
+                          alt="Saved Favorites"
+                          className="w-full h-full object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
+                          <Heart className="w-7 h-7 fill-[#D8C3A5] text-[#D8C3A5]" />
+                        </div>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">Saved Favorites</h2>
+                        <p className="text-xs text-[#9E9384] mt-1 tabular-nums">{likedTrackIds.size} tracks saved locally</p>
+                        <span className="text-xs font-semibold text-[#DFCCB0] mt-2 inline-block">Open collection</span>
+                      </div>
+                    </div>
 
-                  <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
-                    {allPlaylists.slice(0, 5).concat([
-                      {
-                        id: 'liked',
-                        name: 'Liked Songs',
-                        description: 'Your favorite tracks',
-                        coverImage: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?w=500&auto=format&fit=crop&q=80',
-                        tracks: likedTracks
-                      }
-                    ]).map((item) => (
+                    {allPlaylists.map((pl) => (
                       <div
-                        key={item.id}
+                        key={pl.id}
                         onClick={() => {
-                          setSelectedPlaylistId(item.id);
+                          setSelectedPlaylistId(pl.id);
                           setCurrentView('playlist');
                         }}
-                        className="card-interactive group flex items-center bg-[#282828]/70 hover:bg-[#323232] rounded-md overflow-hidden cursor-pointer shadow-sm relative"
+                        className="card-interactive p-3.5 sm:p-4 rounded-2xl bg-[#1B1815] hover:bg-[#24201B] cursor-pointer border border-[#EAE0D0]/[0.08] flex items-center gap-3.5"
                       >
                         <CoverImage
-                          src={item.coverImage}
-                          alt={item.name}
-                          youtubeId={item.tracks[0]?.youtubeId}
+                          src={pl.coverImage}
+                          alt={pl.name}
+                          youtubeId={pl.tracks[0]?.youtubeId}
                           loading="eager"
-                          className="w-12 h-12 sm:w-16 sm:h-16 object-cover shrink-0"
+                          className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-[#12100E]"
                         />
-                        <div className="px-2.5 sm:px-3.5 flex-1 min-w-0 font-bold text-xs sm:text-sm text-white line-clamp-2 sm:truncate">
-                          {item.name}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-display text-sm sm:text-base font-bold text-[#F5F0E8] truncate">{pl.name}</h3>
+                          <p className="text-xs text-[#9E9384] line-clamp-2 mt-1">{pl.description}</p>
+                          <span className="text-xs text-[#DFCCB0] mt-2 block font-medium tabular-nums">
+                            {pl.isCustom ? 'Custom · ' : pl.regionLabel ? `${pl.regionLabel} · ` : ''}
+                            {pl.tracks.length} tracks
+                          </span>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            const playable = filterTracksForOffline(item.tracks, cachedYoutubeIds, isOfflineMode);
-                            if (playable.length > 0) {
-                              handlePlayTrack(playable[0], item.tracks);
-                            } else if (item.tracks.length > 0) {
-                              handlePlayTrack(item.tracks[0], item.tracks);
-                            }
-                          }}
-                          aria-label={`Play ${item.name}`}
-                          className="hidden sm:flex w-10 h-10 rounded-full bg-[#1db954] text-black items-center justify-center opacity-0 group-hover:opacity-100 shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all mr-3 shrink-0 cursor-pointer"
-                        >
-                          <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                        </button>
                       </div>
                     ))}
                   </div>
                 </div>
-
-                {/* Cached Frequently Played Section */}
-                {frequentTracks.length > 0 && selectedGenre === 'all' && (
-                  <div>
-                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                      <div className="min-w-0">
-                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                          <span>Frequently Played</span>
-                          <span className="text-[11px] font-mono font-normal text-emerald-300 bg-emerald-500/15 px-2 py-0.5 rounded-full whitespace-nowrap">
-                            Cached Offline
-                          </span>
-                        </h2>
-                        <p className="text-xs text-neutral-400 mt-0.5">Metadata &amp; artwork saved locally for instant loading</p>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                      {frequentTracks.map((track) => {
-                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                        return (
-                          <div
-                            key={`freq-${track.youtubeId}`}
-                            onClick={() => handlePlayTrack(track, frequentTracks)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg cursor-pointer flex flex-col relative ${
-                              isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''
-                            }`}
-                          >
-                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                              <CoverImage
-                                src={track.thumbnail}
-                                alt={track.title}
-                                youtubeId={track.youtubeId}
-                                loading="eager"
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                              />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isCurrent && isPlaying) {
-                                    handlePlayPause();
-                                  } else {
-                                    handlePlayTrack(track, frequentTracks);
-                                  }
-                                }}
-                                aria-label={`Play ${track.title}`}
-                                className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                  isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                              >
-                                {isCurrent && isPlaying ? (
-                                  <Pause className="w-4 h-4 fill-current" />
-                                ) : (
-                                  <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                )}
-                              </button>
-                            </div>
-                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                              {track.title}
-                            </div>
-                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                              {track.artist}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Section 1: Moroccan Chaabi Classics */}
-                {(selectedGenre === 'all' || selectedGenre === 'chaabi') && (
-                  <div>
-                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                      <div className="min-w-0">
-                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                          <span>Moroccan Chaabi Classics</span>
-                          <span className="text-[11px] font-mono font-normal text-[#1db954] bg-[#1db954]/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                            Heritage
-                          </span>
-                        </h2>
-                        <p className="text-xs text-neutral-400 mt-0.5">Iconic grooves by Daoudi, Senhaji, Najat Aatabou, Stati & Tahour</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelectedPlaylistId('playlist_chaabi');
-                          setCurrentView('playlist');
-                        }}
-                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                      >
-                        Show all
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                      {CURATED_TRACKS.filter(t => t.genre === 'chaabi').map((track) => {
-                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                        const isCached = cachedYoutubeIds.has(track.youtubeId);
-                        const isOfflineDisabled = isOfflineMode && !isCached;
-                        return (
-                          <div
-                            key={track.id}
-                            onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
-                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
-                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
-                          >
-                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                              <CoverImage
-                                src={track.thumbnail}
-                                alt={track.title}
-                                youtubeId={track.youtubeId}
-                                loading="eager"
-                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
-                              />
-                              {!isOfflineDisabled && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isCurrent && isPlaying) {
-                                      handlePlayPause();
-                                    } else {
-                                      handlePlayTrack(track);
-                                    }
-                                  }}
-                                  aria-label={`Play ${track.title}`}
-                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                                >
-                                  {isCurrent && isPlaying ? (
-                                    <Pause className="w-4 h-4 fill-current" />
-                                  ) : (
-                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                              {track.title}
-                            </div>
-                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                              {track.artist}
-                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Section 2: Rai Golden Era */}
-                {(selectedGenre === 'all' || selectedGenre === 'rai') && (
-                  <div>
-                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                      <div className="min-w-0">
-                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                          <span>Rai Golden Era</span>
-                          <span className="text-[11px] font-mono font-normal text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                            Legends
-                          </span>
-                        </h2>
-                        <p className="text-xs text-neutral-400 mt-0.5">Unforgettable classics by Cheb Khaled, Cheb Mami, Cheb Hasni & Rachid Taha</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelectedPlaylistId('playlist_rai');
-                          setCurrentView('playlist');
-                        }}
-                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                      >
-                        Show all
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                      {CURATED_TRACKS.filter(t => t.genre === 'rai').map((track) => {
-                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                        const isCached = cachedYoutubeIds.has(track.youtubeId);
-                        const isOfflineDisabled = isOfflineMode && !isCached;
-                        return (
-                          <div
-                            key={track.id}
-                            onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
-                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
-                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
-                          >
-                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                              <CoverImage
-                                src={track.thumbnail}
-                                alt={track.title}
-                                youtubeId={track.youtubeId}
-                                loading="eager"
-                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
-                              />
-                              {!isOfflineDisabled && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isCurrent && isPlaying) {
-                                      handlePlayPause();
-                                    } else {
-                                      handlePlayTrack(track);
-                                    }
-                                  }}
-                                  aria-label={`Play ${track.title}`}
-                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                                >
-                                  {isCurrent && isPlaying ? (
-                                    <Pause className="w-4 h-4 fill-current" />
-                                  ) : (
-                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                              {track.title}
-                            </div>
-                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                              {track.artist}
-                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Section 3: Maghreb Rap & Trap */}
-                {(selectedGenre === 'all' || selectedGenre === 'rap') && (
-                  <div>
-                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                      <div className="min-w-0">
-                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                          <span>Maghreb Rap & Trap</span>
-                          <span className="text-[11px] font-mono font-normal text-rose-400 bg-rose-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                            Trending
-                          </span>
-                        </h2>
-                        <p className="text-xs text-neutral-400 mt-0.5">Heavyweights from ElGrandeToto, Dizzy Dros, Morad & Soolking</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelectedPlaylistId('playlist_rap');
-                          setCurrentView('playlist');
-                        }}
-                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                      >
-                        Show all
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                      {CURATED_TRACKS.filter(t => t.genre === 'rap').map((track) => {
-                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                        const isCached = cachedYoutubeIds.has(track.youtubeId);
-                        const isOfflineDisabled = isOfflineMode && !isCached;
-                        return (
-                          <div
-                            key={track.id}
-                            onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
-                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
-                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
-                          >
-                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                              <CoverImage
-                                src={track.thumbnail}
-                                alt={track.title}
-                                youtubeId={track.youtubeId}
-                                loading="eager"
-                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
-                              />
-                              {!isOfflineDisabled && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isCurrent && isPlaying) {
-                                      handlePlayPause();
-                                    } else {
-                                      handlePlayTrack(track);
-                                    }
-                                  }}
-                                  aria-label={`Play ${track.title}`}
-                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                                >
-                                  {isCurrent && isPlaying ? (
-                                    <Pause className="w-4 h-4 fill-current" />
-                                  ) : (
-                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                              {track.title}
-                            </div>
-                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                              {track.artist}
-                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Section 4: Global Chart Hits */}
-                {(selectedGenre === 'all' || selectedGenre === 'global') && (
-                  <div>
-                    <div className="flex items-start sm:items-center justify-between gap-3 mb-3 sm:mb-4">
-                      <div className="min-w-0">
-                        <h2 className="text-lg sm:text-xl font-bold text-white flex flex-wrap items-center gap-2">
-                          <span>Global Chart Hits</span>
-                          <span className="text-[11px] font-mono font-normal text-blue-400 bg-blue-400/10 px-2 py-0.5 rounded-full whitespace-nowrap">
-                            Worldwide
-                          </span>
-                        </h2>
-                        <p className="text-xs text-neutral-400 mt-0.5">Worldwide favorites by The Weeknd, Dua Lipa, Kendrick Lamar & Daft Punk</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setSelectedPlaylistId('playlist_global');
-                          setCurrentView('playlist');
-                        }}
-                        className="text-xs font-bold text-neutral-400 hover:text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap pt-1 sm:pt-0"
-                      >
-                        Show all
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
-                      {CURATED_TRACKS.filter(t => t.genre === 'global').map((track) => {
-                        const isCurrent = currentTrack?.id === track.id || currentTrack?.youtubeId === track.youtubeId;
-                        const isCached = cachedYoutubeIds.has(track.youtubeId);
-                        const isOfflineDisabled = isOfflineMode && !isCached;
-                        return (
-                          <div
-                            key={track.id}
-                            onClick={() => handlePlayTrack(track)}
-                            className={`card-interactive group bg-[#181818] hover:bg-[#282828] p-2.5 sm:p-3.5 rounded-lg flex flex-col relative ${
-                              isOfflineDisabled ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer'
-                            } ${isCurrent && isPlaying ? 'ring-1 ring-[#1db954]/60' : ''}`}
-                          >
-                            <div className="relative mb-2.5 sm:mb-3 aspect-square rounded-md overflow-hidden bg-neutral-800">
-                              <CoverImage
-                                src={track.thumbnail}
-                                alt={track.title}
-                                youtubeId={track.youtubeId}
-                                loading="eager"
-                                className={`w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 ${isOfflineDisabled ? 'grayscale' : ''}`}
-                              />
-                              {!isOfflineDisabled && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isCurrent && isPlaying) {
-                                      handlePlayPause();
-                                    } else {
-                                      handlePlayTrack(track);
-                                    }
-                                  }}
-                                  aria-label={`Play ${track.title}`}
-                                  className={`absolute bottom-2 right-2 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#1db954] text-black flex items-center justify-center shadow-xl shadow-black hover:scale-105 active:scale-95 transition-all cursor-pointer ${
-                                    isCurrent ? 'opacity-100 translate-y-0' : 'opacity-90 sm:opacity-0 sm:group-hover:opacity-100 sm:group-hover:translate-y-0 sm:translate-y-2'
-                                  } ${isCurrent && isPlaying ? 'animate-playing-glow' : ''}`}
-                                >
-                                  {isCurrent && isPlaying ? (
-                                    <Pause className="w-4 h-4 fill-current" />
-                                  ) : (
-                                    <Play className="w-4 h-4 fill-current translate-x-0.2" />
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                            <div className={`font-bold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#1db954]' : 'text-white'}`}>
-                              {track.title}
-                            </div>
-                            <div className="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5 sm:mt-1">
-                              {track.artist}
-                              {isOfflineDisabled ? ' • Online only' : isCached ? ' • Cached' : ''}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* VIEW 4: LIBRARY VIEW */}
-            {currentView === 'library' && (
-              <div className="space-y-5 sm:space-y-6">
-                <div className="flex items-center justify-between gap-2">
-                  <h1 className="text-xl sm:text-2xl font-bold text-white">Your Music Library</h1>
-                  <button
-                    onClick={() => setIsCreatePlaylistOpen(true)}
-                    className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-full bg-[#1db954] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-all cursor-pointer shrink-0"
-                  >
-                    <PlusSquare className="w-4 h-4" />
-                    <span>Create Playlist</span>
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  <div
-                    onClick={() => {
-                      setSelectedPlaylistId('liked');
-                      setCurrentView('playlist');
-                    }}
-                    className="card-interactive p-5 sm:p-6 rounded-xl bg-gradient-to-br from-indigo-800 to-purple-900 cursor-pointer shadow-lg flex flex-col justify-between h-40 sm:h-48"
-                  >
-                    <div>
-                      <Heart className="w-7 h-7 sm:w-8 sm:h-8 fill-white text-white mb-2.5 sm:mb-3" />
-                      <h2 className="text-xl sm:text-2xl font-extrabold text-white">Liked Songs</h2>
-                      <p className="text-xs text-neutral-300 mt-1">{likedTrackIds.size} tracks saved</p>
-                    </div>
-                    <span className="text-xs font-semibold text-white/80">Play your favorites</span>
-                  </div>
-
-                  {allPlaylists.map((pl) => (
-                    <div
-                      key={pl.id}
-                      onClick={() => {
-                        setSelectedPlaylistId(pl.id);
-                        setCurrentView('playlist');
-                      }}
-                      className="card-interactive p-3 sm:p-4 rounded-xl bg-[#181818] hover:bg-[#222222] cursor-pointer border border-neutral-800 flex items-center gap-3 sm:gap-4"
-                    >
-                      <CoverImage
-                        src={pl.coverImage}
-                        alt={pl.name}
-                        youtubeId={pl.tracks[0]?.youtubeId}
-                        loading="eager"
-                        className="w-16 h-16 sm:w-24 sm:h-24 rounded-lg object-cover shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm sm:text-base font-bold text-white truncate">{pl.name}</h3>
-                          {pl.isCustom && (
-                            <span className="text-[10px] bg-neutral-800 text-[#1db954] px-1.5 py-0.5 rounded font-mono shrink-0">
-                              Custom
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-neutral-400 line-clamp-2 mt-1">{pl.description}</p>
-                        <span className="text-xs text-[#1db954] mt-1.5 sm:mt-2 block font-medium">
-                          {pl.tracks.length} tracks
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              )}
             </div>
           </main>
         </div>
@@ -1623,11 +1477,12 @@ export default function App() {
         />
       </div>
 
-      {/* Expanded Album Artwork Modal (Track Cover View) */}
+      {/* Expanded Track & Artist Detail Modal */}
       <ExpandedCoverModal
         isOpen={isExpandedCoverOpen}
         onClose={() => setIsExpandedCoverOpen(false)}
         track={currentTrack}
+        catalog={CURATED_TRACKS}
         isPlaying={isPlaying}
         currentTime={currentTime}
         duration={duration}
@@ -1647,9 +1502,10 @@ export default function App() {
         }}
         onToggleShuffle={() => setIsShuffle(prev => !prev)}
         onToggleLike={(track) => handleToggleLike(track)}
+        onPlayTrack={handlePlayTrack}
+        onSearchArtist={handleSelectRecentSearch}
       />
 
-      {/* Sleep Timer Modal */}
       <SleepTimerModal
         isOpen={isSleepTimerOpen}
         onClose={() => setIsSleepTimerOpen(false)}
@@ -1657,14 +1513,12 @@ export default function App() {
         onSetTimer={setSleepTimerMinutes}
       />
 
-      {/* Create Custom Playlist Modal */}
       <CreatePlaylistModal
         isOpen={isCreatePlaylistOpen}
         onClose={() => setIsCreatePlaylistOpen(false)}
         onCreatePlaylist={handleCreatePlaylist}
       />
 
-      {/* Hybrid Background Audio + YouTube IFrame Player */}
       <YouTubePlayerEmbed
         currentTrack={currentTrack}
         isPlaying={isPlaying}
@@ -1679,11 +1533,8 @@ export default function App() {
         onNext={handleNext}
         onPrevious={handlePrevious}
         onSeek={handleSeek}
-        isVisible={isVideoVisible}
-        onCloseVideo={() => setIsVideoVisible(false)}
       />
 
-      {/* Persistent Bottom Spotify Player Bar */}
       <PlayerBar
         currentTrack={currentTrack}
         isPlaying={isPlaying}
@@ -1695,7 +1546,6 @@ export default function App() {
         isShuffle={isShuffle}
         isLiked={currentTrack ? likedTrackIds.has(currentTrack.id) : false}
         isQueueOpen={isQueueOpen}
-        isVideoVisible={isVideoVisible}
         activeSleepTimer={sleepTimerMinutes}
         queueCount={queue.length > 0 ? Math.max(0, queue.length - queueIndex - 1) : 0}
         onPlayPause={handlePlayPause}
@@ -1717,19 +1567,16 @@ export default function App() {
         }}
         onToggleLike={(track) => handleToggleLike(track)}
         onToggleQueue={() => setIsQueueOpen(prev => !prev)}
-        onToggleVideo={() => setIsVideoVisible(prev => !prev)}
         onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
         onOpenExpandedCover={() => setIsExpandedCoverOpen(true)}
       />
 
-      {/* Mobile Bottom Navigation Bar */}
       <MobileNav
         currentView={currentView}
         onNavigate={handleNavigate}
         onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
       />
 
-      {/* Background Playback Permission Modal */}
       <BackgroundPermissionModal
         isOpen={isBgPermissionOpen}
         onClose={() => setIsBgPermissionOpen(false)}
@@ -1738,21 +1585,18 @@ export default function App() {
         }}
       />
 
-      {/* Non-intrusive notice pill for offline restrictions & cache confirmations */}
       {offlineNotice && (
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-44 md:bottom-36 left-1/2 -translate-x-1/2 z-50 rounded-full bg-neutral-900/95 border border-neutral-700 px-4 py-2 text-xs font-semibold text-white shadow-2xl whitespace-nowrap max-w-[92vw] truncate"
+          className="fixed bottom-40 md:bottom-28 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-[#1B1815]/95 border border-[#D8C3A5]/40 px-4 py-2 text-xs font-semibold text-[#EDE0CC] shadow-2xl whitespace-nowrap max-w-[92vw] truncate"
         >
           {offlineNotice}
         </div>
       )}
 
-      {/* Automatic Offline Connectivity Banner */}
       <OfflineIndicator cachedTrackCount={cachedTrackEntries.length} />
 
-      {/* Legal & Compliance Modal (Privacy Policy, Terms of Service, DMCA, Cookies) */}
       <LegalModal
         isOpen={isLegalOpen}
         onClose={() => setIsLegalOpen(false)}

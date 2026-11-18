@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, Mic2, Maximize2, Minimize2, Sparkles, Music, SlidersHorizontal, RotateCcw, Plus, Minus } from 'lucide-react';
+import { X, Mic2, Maximize2, Minimize2, Sparkles, Music, SlidersHorizontal, RotateCcw } from 'lucide-react';
 import { Track, LyricLine } from '../types/music';
 
 interface LyricsViewProps {
@@ -67,28 +67,28 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
 
   return (
     <div
-      className={`fixed z-40 bg-[#121212]/95 backdrop-blur-2xl border-l border-neutral-800 flex flex-col transition-all duration-300 shadow-2xl select-none ${
+      className={`fixed z-40 bg-[#161310]/96 backdrop-blur-2xl border-l border-[#EAE0D0]/10 flex flex-col transition-all duration-300 shadow-2xl select-none ${
         isFullScreen
           ? 'inset-0 pb-24 z-50'
           : 'top-0 right-0 bottom-24 w-full sm:w-[450px] md:w-[500px]'
       }`}
     >
       {/* Top Header */}
-      <div className="p-4 border-b border-neutral-800/80 bg-black/40 flex flex-col gap-2">
+      <div className="p-4 border-b border-[#EAE0D0]/[0.08] bg-[#12100E]/60 flex flex-col gap-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-full bg-[#1db954]/20 text-[#1db954] flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-[#D8C3A5]/15 text-[#DFCCB0] flex items-center justify-center">
               <Mic2 className="w-4 h-4" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h2 className="text-white font-bold text-sm tracking-tight">Lyrics & Captions</h2>
-                <span className="text-[10px] bg-[#1db954] text-black font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-wider">
+                <h2 className="font-display text-[#F5F0E8] font-bold text-sm tracking-tight">Lyrics &amp; Captions</h2>
+                <span className="text-[10px] bg-[#D8C3A5] text-[#12100E] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider">
                   Live Sync
                 </span>
               </div>
-              <p className="text-[11px] text-neutral-400 truncate max-w-[200px] sm:max-w-[260px]">
-                {track ? `${track.title} • ${track.artist}` : 'Karaoke Synchronized'}
+              <p className="text-[11px] text-[#9E9384] truncate max-w-[200px] sm:max-w-[260px]">
+                {track ? `${track.title} · ${track.artist}` : 'Synchronized Lyrics'}
               </p>
             </div>
           </div>
@@ -96,13 +96,14 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
           <div className="flex items-center gap-1.5">
             {/* Sync calibration toggle button */}
             <button
+              type="button"
               onClick={() => setShowSyncControls(prev => !prev)}
               aria-label="Toggle Sync Calibration"
               title="Calibrate Timing Offset (Nudge if lyrics are ahead/behind)"
-              className={`px-2 py-1.5 rounded text-xs flex items-center gap-1 transition-colors cursor-pointer ${
+              className={`px-2 py-1.5 rounded-lg text-xs flex items-center gap-1 transition-colors cursor-pointer ${
                 showSyncControls || syncOffset !== 0
-                  ? 'bg-[#1db954]/20 text-[#1db954] border border-[#1db954]/30'
-                  : 'text-neutral-400 hover:text-white hover:bg-neutral-800'
+                  ? 'bg-[#D8C3A5]/20 text-[#DFCCB0] border border-[#D8C3A5]/30'
+                  : 'text-[#9E9384] hover:text-[#F5F0E8] hover:bg-[#24201B]'
               }`}
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -112,34 +113,34 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
             </button>
 
             <button
+              type="button"
               onClick={() => setIsFullScreen(!isFullScreen)}
               aria-label={isFullScreen ? 'Exit Fullscreen' : 'Fullscreen Lyrics'}
-              className="p-1.5 text-neutral-400 hover:text-white rounded hover:bg-neutral-800 transition-colors cursor-pointer"
+              className="p-1.5 text-[#9E9384] hover:text-[#F5F0E8] rounded-lg hover:bg-[#24201B] transition-colors cursor-pointer"
             >
               {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
             <button
+              type="button"
               onClick={onClose}
               aria-label="Close Lyrics View"
-              className="p-1.5 text-neutral-400 hover:text-white rounded hover:bg-neutral-800 transition-colors cursor-pointer"
+              className="p-1.5 text-[#9E9384] hover:text-[#F5F0E8] rounded-lg hover:bg-[#24201B] transition-colors cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Sync Calibration Controls Bar (Allows users to nudge audio/vocal timing to perfection) */}
+        {/* Sync Calibration Controls Bar */}
         {(showSyncControls || syncOffset !== 0) && (
-          <div className="flex flex-col gap-1.5 bg-neutral-900/90 border border-neutral-800 px-3 py-2 rounded-lg text-xs mt-1 animate-fadeIn">
+          <div className="flex flex-col gap-1.5 bg-[#1B1815] border border-[#EAE0D0]/10 px-3 py-2 rounded-xl text-xs mt-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-neutral-400 text-[11px]">Sync Timing:</span>
+                <span className="text-[#9E9384] text-[11px]">Sync Timing:</span>
                 <span className={`font-mono font-bold text-[11px] px-2 py-0.5 rounded border ${
-                  syncOffset < 0
-                    ? 'text-emerald-400 bg-emerald-950/40 border-emerald-800/50'
-                    : syncOffset > 0
-                    ? 'text-amber-400 bg-amber-950/40 border-amber-800/50'
-                    : 'text-white bg-black/60 border-neutral-800'
+                  syncOffset !== 0
+                    ? 'text-[#DFCCB0] bg-[#D8C3A5]/15 border-[#D8C3A5]/30'
+                    : 'text-[#F5F0E8] bg-[#12100E]/70 border-[#EAE0D0]/10'
                 }`}>
                   {syncOffset === 0 ? '0.0s (Exact)' : `${syncOffset > 0 ? '+' : ''}${syncOffset.toFixed(1)}s ${syncOffset < 0 ? '(Delayed)' : '(Advanced)'}`}
                 </span>
@@ -147,9 +148,10 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
 
               {syncOffset !== 0 && (
                 <button
+                  type="button"
                   onClick={() => setSyncOffset(0)}
                   title="Reset Sync Offset to 0.0s"
-                  className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-red-900/40 text-neutral-400 hover:text-red-300 cursor-pointer transition-colors text-[10px] flex items-center gap-1"
+                  className="px-1.5 py-0.5 rounded bg-[#24201B] hover:bg-rose-900/40 text-[#9E9384] hover:text-rose-300 cursor-pointer transition-colors text-[10px] flex items-center gap-1"
                 >
                   <RotateCcw className="w-3 h-3" />
                   <span>Reset</span>
@@ -158,54 +160,60 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
             </div>
 
             {/* Quick 1-click Preset Buttons for Instant Calibration */}
-            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-neutral-800/60">
-              <span className="text-[10px] text-neutral-400 font-medium">Delay text:</span>
+            <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-[#EAE0D0]/[0.07]">
+              <span className="text-[10px] text-[#9E9384] font-medium">Delay text:</span>
               <button
+                type="button"
                 onClick={() => setSyncOffset(-7)}
-                title="Delay lyrics by 7s (Fixes 8s to 15s intro gap)"
+                title="Delay lyrics by 7s"
                 className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold cursor-pointer transition-colors ${
-                  syncOffset === -7 ? 'bg-[#1db954] text-black' : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
+                  syncOffset === -7 ? 'bg-[#D8C3A5] text-[#12100E]' : 'bg-[#24201B] hover:bg-[#2F2A24] text-[#E4DDD2]'
                 }`}
               >
                 -7s
               </button>
               <button
+                type="button"
                 onClick={() => setSyncOffset(-4)}
-                title="Delay lyrics by 4s (if text appears before vocals)"
+                title="Delay lyrics by 4s"
                 className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold cursor-pointer transition-colors ${
-                  syncOffset === -4 ? 'bg-[#1db954] text-black' : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
+                  syncOffset === -4 ? 'bg-[#D8C3A5] text-[#12100E]' : 'bg-[#24201B] hover:bg-[#2F2A24] text-[#E4DDD2]'
                 }`}
               >
                 -4s
               </button>
               <button
+                type="button"
                 onClick={() => setSyncOffset(-2)}
                 title="Delay lyrics by 2s"
                 className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold cursor-pointer transition-colors ${
-                  syncOffset === -2 ? 'bg-[#1db954] text-black' : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
+                  syncOffset === -2 ? 'bg-[#D8C3A5] text-[#12100E]' : 'bg-[#24201B] hover:bg-[#2F2A24] text-[#E4DDD2]'
                 }`}
               >
                 -2s
               </button>
               <button
+                type="button"
                 onClick={() => setSyncOffset(prev => Math.round((prev - 0.5) * 10) / 10)}
                 title="Delay lyrics by 0.5s"
-                className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-mono font-bold cursor-pointer"
+                className="px-1.5 py-0.5 rounded bg-[#24201B] hover:bg-[#2F2A24] text-[#E4DDD2] text-[11px] font-mono font-bold cursor-pointer"
               >
                 -0.5s
               </button>
               <button
+                type="button"
                 onClick={() => setSyncOffset(prev => Math.round((prev + 0.5) * 10) / 10)}
                 title="Advance lyrics by 0.5s"
-                className="px-1.5 py-0.5 rounded bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-[11px] font-mono font-bold cursor-pointer"
+                className="px-1.5 py-0.5 rounded bg-[#24201B] hover:bg-[#2F2A24] text-[#E4DDD2] text-[11px] font-mono font-bold cursor-pointer"
               >
                 +0.5s
               </button>
               <button
+                type="button"
                 onClick={() => setSyncOffset(2)}
                 title="Advance lyrics by 2s"
                 className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold cursor-pointer transition-colors ${
-                  syncOffset === 2 ? 'bg-[#1db954] text-black' : 'bg-neutral-800 hover:bg-neutral-700 text-neutral-200'
+                  syncOffset === 2 ? 'bg-[#D8C3A5] text-[#12100E]' : 'bg-[#24201B] hover:bg-[#2F2A24] text-[#E4DDD2]'
                 }`}
               >
                 +2s
@@ -218,11 +226,11 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
       {/* Synchronized Lyrics Scroll Container */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto px-6 py-12 space-y-7 scrollbar-thin scrollbar-thumb-neutral-800 text-center will-change-scroll"
+        className="flex-1 overflow-y-auto px-6 py-12 space-y-7 scrollbar-thin text-center will-change-scroll"
       >
         {lyrics.length === 0 ? (
-          <div className="text-neutral-500 py-16 flex flex-col items-center gap-3">
-            <Music className="w-8 h-8 text-neutral-600" />
+          <div className="text-[#8F8476] py-16 flex flex-col items-center gap-3">
+            <Music className="w-8 h-8 text-[#8F8476]" />
             <p className="text-sm">No captions available for this track.</p>
           </div>
         ) : (
@@ -233,19 +241,19 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
             return (
               <div
                 key={idx}
-                ref={isActive ? (activeLineRef as any) : null}
+                ref={isActive ? (activeLineRef as React.RefObject<HTMLDivElement>) : null}
                 onClick={() => onSeek(Math.max(0, line.time - syncOffset))}
                 className={`group transition-all duration-200 cursor-pointer py-1 ${
                   isActive ? 'scale-105' : 'hover:scale-[1.02]'
                 }`}
               >
                 <p
-                  className={`font-extrabold leading-relaxed transition-colors duration-200 ${
+                  className={`font-display font-bold leading-relaxed transition-colors duration-200 ${
                     isActive
-                      ? 'text-[#1db954] text-2xl md:text-3xl drop-shadow-[0_2px_12px_rgba(29,185,84,0.4)]'
+                      ? 'text-[#DFCCB0] text-2xl md:text-3xl drop-shadow-[0_2px_14px_rgba(216,195,165,0.28)]'
                       : isPast
-                      ? 'text-neutral-400 text-lg md:text-xl group-hover:text-neutral-200'
-                      : 'text-neutral-600 text-lg md:text-xl group-hover:text-neutral-300'
+                      ? 'text-[#9E9384] text-lg md:text-xl group-hover:text-[#E4DDD2]'
+                      : 'text-[#6E655A] text-lg md:text-xl group-hover:text-[#C8BEB0]'
                   }`}
                 >
                   {line.text}
@@ -253,8 +261,8 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
                 <span
                   className={`text-[10px] font-mono transition-opacity duration-200 ${
                     isActive
-                      ? 'text-[#1db954]/70 opacity-100'
-                      : 'text-neutral-600 opacity-0 group-hover:opacity-100'
+                      ? 'text-[#DFCCB0]/80 opacity-100'
+                      : 'text-[#8F8476] opacity-0 group-hover:opacity-100'
                   }`}
                 >
                   {formatLyricTime(line.time)}
@@ -266,12 +274,12 @@ export const LyricsView: React.FC<LyricsViewProps> = ({
       </div>
 
       {/* Bottom hint banner */}
-      <div className="p-3 bg-black/60 border-t border-neutral-800/60 text-center text-[11px] text-neutral-400 flex items-center justify-between px-4">
+      <div className="p-3 bg-[#12100E]/75 border-t border-[#EAE0D0]/[0.07] text-center text-[11px] text-[#9E9384] flex items-center justify-between px-4">
         <div className="flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-[#1db954]" />
-          <span>Tap any lyric line to jump directly to that part!</span>
+          <Sparkles className="w-3.5 h-3.5 text-[#DFCCB0]" />
+          <span>Tap any lyric line to jump directly to that part</span>
         </div>
-        <span className="font-mono text-neutral-500 text-[10px]">
+        <span className="font-mono text-[#8F8476] text-[10px]">
           {formatLyricTime(effectiveTime)}
         </span>
       </div>

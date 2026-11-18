@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Moon, Check, Clock } from 'lucide-react';
+import { X, Moon, Check } from 'lucide-react';
 
 interface SleepTimerModalProps {
   isOpen: boolean;
@@ -22,28 +22,29 @@ export const SleepTimerModal: React.FC<SleepTimerModalProps> = ({
     { label: '30 minutes', minutes: 30 },
     { label: '45 minutes', minutes: 45 },
     { label: '1 hour', minutes: 60 },
-    { label: 'End of track', minutes: -1 }, // -1 sentinel for end of track
+    { label: 'End of track', minutes: -1 },
     { label: 'Turn off timer', minutes: null }
   ];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 select-none">
-      <div className="bg-[#1e1e1e] border border-neutral-700 w-full max-w-sm rounded-2xl p-5 shadow-2xl relative text-white">
+      <div className="bg-[#1B1815] border border-[#EAE0D0]/12 w-full max-w-sm rounded-2xl p-5 shadow-2xl relative text-[#F5F0E8]">
         <button
+          type="button"
           onClick={onClose}
           aria-label="Close Sleep Timer"
-          className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1 rounded-full hover:bg-neutral-800 transition-colors cursor-pointer"
+          className="absolute top-4 right-4 text-[#9E9384] hover:text-[#F5F0E8] p-1.5 rounded-lg hover:bg-[#EAE0D0]/[0.06] transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2.5 mb-4">
-          <div className="w-9 h-9 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-[#D8C3A5]/15 text-[#DFCCB0] flex items-center justify-center">
             <Moon className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-base font-bold">Sleep Timer</h2>
-            <p className="text-[11px] text-neutral-400">Stop audio when you fall asleep</p>
+            <h2 className="font-display text-base font-bold text-[#F5F0E8]">Sleep Timer</h2>
+            <p className="text-xs text-[#9E9384]">Pause playback automatically</p>
           </div>
         </div>
 
@@ -52,19 +53,20 @@ export const SleepTimerModal: React.FC<SleepTimerModalProps> = ({
             const isSelected = activeTimerMinutes === opt.minutes;
             return (
               <button
+                type="button"
                 key={opt.label}
                 onClick={() => {
                   onSetTimer(opt.minutes);
                   onClose();
                 }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
                   isSelected
-                    ? 'bg-[#1db954] text-black font-bold'
-                    : 'text-neutral-300 hover:bg-neutral-800'
+                    ? 'bg-[#D8C3A5] text-[#12100E] font-bold'
+                    : 'text-[#C8BEB0] hover:bg-[#EAE0D0]/[0.06]'
                 }`}
               >
                 <span>{opt.label}</span>
-                {isSelected && <Check className="w-4 h-4 text-black" />}
+                {isSelected && <Check className="w-4 h-4" />}
               </button>
             );
           })}

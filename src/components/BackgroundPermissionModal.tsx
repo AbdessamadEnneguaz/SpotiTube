@@ -62,49 +62,48 @@ export const BackgroundPermissionModal: React.FC<BackgroundPermissionModalProps>
         role="dialog"
         aria-modal="true"
         aria-labelledby="bg-perm-title"
-        className="w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-2xl bg-[#181818] border border-neutral-700 p-5 sm:p-6 shadow-2xl text-white relative space-y-4"
+        className="w-full max-w-md max-h-[92dvh] overflow-y-auto rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/12 p-5 sm:p-6 shadow-2xl text-[#F5F0E8] relative space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
           onClick={handleDismiss}
           aria-label="Close permissions prompt"
-          className="absolute top-4 right-4 text-neutral-400 hover:text-white p-1 rounded-full hover:bg-neutral-800 cursor-pointer"
+          className="absolute top-4 right-4 text-[#9E9384] hover:text-[#F5F0E8] p-1.5 rounded-lg hover:bg-[#EAE0D0]/[0.06] cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2.5 text-[#1db954]">
-          <Radio className="w-5 h-5" />
-          <span className="text-xs font-bold uppercase tracking-wider">App Permissions</span>
+        <div className="flex items-center gap-2 text-[#DFCCB0]">
+          <Radio className="w-4 h-4" />
+          <span className="text-xs font-semibold">App Permissions</span>
         </div>
 
         <div>
-          <h3 id="bg-perm-title" className="text-lg font-bold text-white">
+          <h3 id="bg-perm-title" className="font-display text-lg font-bold text-[#F5F0E8]">
             Allow Permissions for Background &amp; Offline Play
           </h3>
-          <p className="mt-1.5 text-xs sm:text-sm text-neutral-300 leading-relaxed">
-            Allow all app permissions so music continues playing in the background when leaving the app and your cached tracks stay saved offline.
+          <p className="mt-1.5 text-xs sm:text-sm text-[#C8BEB0] leading-relaxed">
+            Allow permissions so audio keeps running when switching apps and cached tracks remain available offline.
           </p>
         </div>
 
-        {/* All Permissions Overview */}
         <div className="space-y-2.5">
-          <div className="flex items-center justify-between rounded-xl bg-neutral-900/90 border border-neutral-800 px-3.5 py-2.5">
+          <div className="flex items-center justify-between rounded-xl bg-[#12100E]/75 border border-[#EAE0D0]/[0.08] px-3.5 py-2.5">
             <div className="flex items-center gap-2.5">
-              <Bell className="w-4 h-4 text-[#1db954] shrink-0" />
+              <Bell className="w-4 h-4 text-[#DFCCB0] shrink-0" />
               <div>
-                <div className="text-xs font-bold text-white">Media Notifications</div>
-                <div className="text-[11px] text-neutral-400">Keeps background playback active &amp; lock-screen controls</div>
+                <div className="text-xs font-semibold text-[#F5F0E8]">Media Notifications</div>
+                <div className="text-[11px] text-[#9E9384]">Lock-screen controls &amp; playback alerts</div>
               </div>
             </div>
             <span
-              className={`text-[11px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+              className={`text-xs font-semibold shrink-0 ${
                 notifStatus === 'granted'
-                  ? 'bg-[#1db954]/20 text-[#1db954]'
+                  ? 'text-[#DFCCB0]'
                   : notifStatus === 'denied'
-                    ? 'bg-red-500/20 text-red-400'
-                    : 'bg-neutral-800 text-neutral-300'
+                    ? 'text-rose-400'
+                    : 'text-[#C8BEB0]'
               }`}
             >
               {notifStatus === 'granted'
@@ -117,53 +116,47 @@ export const BackgroundPermissionModal: React.FC<BackgroundPermissionModalProps>
             </span>
           </div>
 
-          <div className="flex items-center justify-between rounded-xl bg-neutral-900/90 border border-neutral-800 px-3.5 py-2.5">
+          <div className="flex items-center justify-between rounded-xl bg-[#12100E]/75 border border-[#EAE0D0]/[0.08] px-3.5 py-2.5">
             <div className="flex items-center gap-2.5">
-              <Smartphone className="w-4 h-4 text-[#1db954] shrink-0" />
+              <Smartphone className="w-4 h-4 text-[#DFCCB0] shrink-0" />
               <div>
-                <div className="text-xs font-bold text-white">Background Audio Focus</div>
-                <div className="text-[11px] text-neutral-400">Unlocks audio session &amp; lock-screen skip controls</div>
+                <div className="text-xs font-semibold text-[#F5F0E8]">Background Audio Focus</div>
+                <div className="text-[11px] text-[#9E9384]">Maintains continuous audio session</div>
               </div>
             </div>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#1db954]/20 text-[#1db954] shrink-0">
+            <span className="text-xs font-semibold text-[#DFCCB0] shrink-0">
               {audioUnlocked ? 'Unlocked' : 'Ready'}
             </span>
           </div>
 
-          <div className="flex items-center justify-between rounded-xl bg-neutral-900/90 border border-neutral-800 px-3.5 py-2.5">
+          <div className="flex items-center justify-between rounded-xl bg-[#12100E]/75 border border-[#EAE0D0]/[0.08] px-3.5 py-2.5">
             <div className="flex items-center gap-2.5">
-              <HardDrive className="w-4 h-4 text-[#1db954] shrink-0" />
+              <HardDrive className="w-4 h-4 text-[#DFCCB0] shrink-0" />
               <div>
-                <div className="text-xs font-bold text-white">Persistent Offline Cache</div>
-                <div className="text-[11px] text-neutral-400">Protects cached tracks for automatic offline mode</div>
+                <div className="text-xs font-semibold text-[#F5F0E8]">Persistent Offline Cache</div>
+                <div className="text-[11px] text-[#9E9384]">Protects cached tracks offline</div>
               </div>
             </div>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#1db954]/20 text-[#1db954] shrink-0">
+            <span className="text-xs font-semibold text-[#DFCCB0] shrink-0">
               {persistentStorage ? 'Allowed' : 'Ready'}
             </span>
           </div>
         </div>
 
         {notifStatus === 'denied' && (
-          <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 text-xs text-amber-200">
-            <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+          <div className="flex items-start gap-2 rounded-xl bg-[#D8C3A5]/10 border border-[#D8C3A5]/30 p-3 text-xs text-[#EDE0CC]">
+            <AlertCircle className="w-4 h-4 text-[#DFCCB0] shrink-0 mt-0.5" />
             <span>
-              Browser notifications are currently blocked. Open Chrome/Safari Site Settings and set Notifications to <strong>Allow</strong>.
+              Browser notifications are blocked. Open Site Settings and set Notifications to <strong>Allow</strong>.
             </span>
           </div>
         )}
-
-        <div className="rounded-xl bg-neutral-900/60 border border-neutral-800/80 p-3 text-[11px] text-neutral-300 leading-relaxed">
-          <strong className="text-white">Phone Battery Tip:</strong> For uninterrupted background play on Android, set{' '}
-          <span className="text-neutral-100">Settings → Apps → SpotiTube / Chrome → Battery</span> to{' '}
-          <strong className="text-[#1db954]">Unrestricted</strong>.
-        </div>
 
         <div className="flex items-center gap-2.5 pt-1">
           <button
             type="button"
             onClick={handleDismiss}
-            className="px-4 py-2.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-xs sm:text-sm font-semibold text-neutral-200 transition-colors cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-[#EAE0D0]/[0.07] hover:bg-[#EAE0D0]/[0.12] text-xs sm:text-sm font-semibold text-[#E4DDD2] transition-colors cursor-pointer"
           >
             Not now
           </button>
@@ -171,7 +164,7 @@ export const BackgroundPermissionModal: React.FC<BackgroundPermissionModalProps>
             type="button"
             onClick={handleEnableAllPermissions}
             disabled={isRequesting}
-            className="flex-1 flex items-center justify-center gap-2 rounded-full bg-[#1db954] hover:bg-[#1ed760] py-2.5 px-4 text-xs sm:text-sm font-bold text-black transition-all cursor-pointer disabled:opacity-60"
+            className="flex-1 flex items-center justify-center gap-2 rounded-xl bg-[#D8C3A5] hover:bg-[#E4D3BA] py-2.5 px-4 text-xs sm:text-sm font-bold text-[#12100E] transition-colors cursor-pointer disabled:opacity-60"
           >
             <CheckCircle2 className="w-4 h-4" />
             <span>{isRequesting ? 'Allowing...' : 'Allow All Permissions'}</span>

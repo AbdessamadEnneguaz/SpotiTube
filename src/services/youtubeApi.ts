@@ -79,7 +79,7 @@ function mapRawSearchItems(items: any[]): Track[] {
         youtubeId: videoId,
         title,
         artist,
-        album: 'YouTube Music',
+        album: 'Studio Single',
         thumbnail: sanitizeMediaUrl(item.thumbnail, defaultThumb),
         durationSeconds: typeof item.durationSeconds === 'number' && item.durationSeconds > 0 ? item.durationSeconds : 210,
         durationFormatted: sanitizeClientText(item.durationFormatted || '3:30', 16) || '3:30',
@@ -130,7 +130,7 @@ async function searchClientMirrors(query: string): Promise<Track[]> {
           youtubeId: videoId,
           title,
           artist,
-          album: 'YouTube Music',
+          album: 'Studio Single',
           thumbnail: sanitizeMediaUrl(item.thumbnail, defaultThumb),
           durationSeconds: dur,
           durationFormatted: `${mins}:${secs}`,
@@ -248,9 +248,12 @@ export async function searchYouTube(
 
 function detectGenre(title: string, artist: string, desc: string = ''): Track['genre'] {
   const combined = `${title} ${artist} ${desc}`.toLowerCase();
-  if (combined.includes('chaabi') || combined.includes('daoudi') || combined.includes('senhaji') || combined.includes('stati') || combined.includes('tahour') || combined.includes('aatabou')) return 'chaabi';
-  if (combined.includes('rai') || combined.includes('khaled') || combined.includes('mami') || combined.includes('hasni') || combined.includes('bilal') || combined.includes('taha')) return 'rai';
-  if (combined.includes('rap') || combined.includes('trap') || combined.includes('drill') || combined.includes('toto') || combined.includes('morad') || combined.includes('7elmet') || combined.includes('dizzy') || combined.includes('soolking') || combined.includes('tagne') || combined.includes('kouz1')) return 'rap';
+  if (combined.includes('afro') || combined.includes('amapiano') || combined.includes('burna') || combined.includes('rema') || combined.includes('wizkid') || combined.includes('tyla')) return 'afrobeats';
+  if (combined.includes('latin') || combined.includes('reggaeton') || combined.includes('bad bunny') || combined.includes('shakira') || combined.includes('rosalia') || combined.includes('anitta')) return 'latin';
+  if (combined.includes('k-pop') || combined.includes('kpop') || combined.includes('bts') || combined.includes('blackpink') || combined.includes('newjeans')) return 'kpop';
+  if (combined.includes('house') || combined.includes('techno') || combined.includes('electro') || combined.includes('daft punk') || combined.includes('remix')) return 'electronic';
+  if (combined.includes('rap') || combined.includes('hip hop') || combined.includes('trap') || combined.includes('kendrick') || combined.includes('drake')) return 'hiphop';
+  if (combined.includes('pop') || combined.includes('weeknd') || combined.includes('dua lipa') || combined.includes('adele')) return 'pop';
   return 'global';
 }
 

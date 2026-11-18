@@ -6,13 +6,16 @@ const FALLBACK_ART_SVG =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
       <defs>
         <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stop-color="#14532d"/>
-          <stop offset="100%" stop-color="#09090b"/>
+          <stop offset="0%" stop-color="#241F1A"/>
+          <stop offset="100%" stop-color="#12100E"/>
         </linearGradient>
       </defs>
       <rect width="200" height="200" fill="url(#g)"/>
-      <circle cx="100" cy="100" r="44" fill="none" stroke="#1db954" stroke-width="5" opacity="0.8"/>
-      <path d="M92 78v36.5a11 11 0 1 1-6-9.8V74l32-8v38.5a11 11 0 1 1-6-9.8V73z" fill="#1db954"/>
+      <circle cx="100" cy="100" r="44" fill="none" stroke="#D8C3A5" stroke-width="4" opacity="0.7"/>
+      <circle cx="100" cy="100" r="26" fill="none" stroke="#DFCCB0" stroke-width="2" opacity="0.45"/>
+      <rect x="88" y="84" width="5" height="32" rx="2.5" fill="#D8C3A5"/>
+      <rect x="97.5" y="74" width="5" height="52" rx="2.5" fill="#F5F0E8"/>
+      <rect x="107" y="88" width="5" height="24" rx="2.5" fill="#D8C3A5"/>
     </svg>`
   );
 
@@ -59,6 +62,7 @@ export const CoverImage: React.FC<CoverImageProps> = React.memo(({
       alt={alt}
       loading={loading}
       decoding="async"
+      referrerPolicy="no-referrer"
       onError={handleError}
       onClick={onClick}
       className={className}

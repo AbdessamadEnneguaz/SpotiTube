@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   X,
   Play,
@@ -9,15 +9,29 @@ import {
   Repeat,
   Repeat1,
   Heart,
-  ChevronDown
+  ChevronDown,
+  MapPin,
+  Disc3,
+  Music2,
+  UserRound,
+  Search,
+  Sparkles
 } from 'lucide-react';
 import { Track, RepeatMode } from '../types/music';
 import { formatDuration } from '../utils/formatters';
+import {
+  buildArtistProfile,
+  extractPrimaryArtistName,
+  findRelatedTracks,
+  getCuratedArtistProfile
+} from '../utils/artistProfile';
+import { CoverImage } from './CoverImage';
 
 interface ExpandedCoverModalProps {
   isOpen: boolean;
   onClose: () => void;
   track: Track | null;
+  catalog: Track[];
   isPlaying: boolean;
   currentTime: number;
   duration: number;
@@ -31,12 +45,22 @@ interface ExpandedCoverModalProps {
   onToggleRepeat: () => void;
   onToggleShuffle: () => void;
   onToggleLike: (track: Track) => void;
+  onPlayTrack: (track: Track, contextList?: Track[]) => void;
+  onSearchArtist: (artistName: string) => void;
+}
+
+interface LiveArtistResponse {
+  found?: boolean;
+  extract?: string;
+  description?: string;
+  thumbnail?: string;
 }
 
 export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
   isOpen,
   onClose,
   track,
+  catalog,
   isPlaying,
   currentTime,
   duration,
@@ -49,21 +73,66 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
   onSeek,
   onToggleRepeat,
   onToggleShuffle,
-  onToggleLike
+  onToggleLike,
+  onPlayTrack,
+  onSearchArtist
 }) => {
   const [imgSrc, setImgSrc] = useState<string>('');
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekVal, setSeekVal] = useState(0);
+  const [liveArtistData, setLiveArtistData] = useState<LiveArtistResponse | null>(null);
+  const [isLoadingArtist, setIsLoadingArtist] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
 
-  // Set high-res cover artwork with fallback on error
+  const primaryArtistName = useMemo(
+    () => (track ? extractPrimaryArtistName(track.artist) : ''),
+    [track?.artist]
+  );
+
   useEffect(() => {
     if (track) {
-      const highRes = `https://i.ytimg.com/vi/${track.youtubeId}/maxresdefault.jpg`;
-      setImgSrc(highRes);
+      const highRes = `https://i.ytimg.com/vi/${track.youtubeId}/hqdefault.jpg`;
+      setImgSrc(track.thumbnail || highRes);
     }
   }, [track?.youtubeId, track?.thumbnail]);
 
-  // Handle ESC key to close modal
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [liveArtistData?.thumbnail, track?.artist]);
+
+  useEffect(() => {
+    if (!isOpen || !track) return;
+
+    const curated = getCuratedArtistProfile(track.artist);
+    if (curated) {
+      setLiveArtistData(null);
+      setIsLoadingArtist(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLiveArtistData(null);
+    setIsLoadingArtist(true);
+
+    fetch(`/api/artist?name=${encodeURIComponent(primaryArtistName)}`)
+      .then((res) => (res.ok ? res.json() : { found: false }))
+      .then((data: LiveArtistResponse) => {
+        if (!cancelled) {
+          setLiveArtistData(data?.found ? data : null);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLiveArtistData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingArtist(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, track?.artist, primaryArtistName]);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -73,202 +142,388 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  if (!isOpen || !track) return null;
+  const artistProfile = useMemo(() => {
+    if (!track) return null;
+    return buildArtistProfile(track, liveArtistData);
+  }, [track, liveArtistData]);
 
+  const relatedTracks = useMemo(() => {
+    if (!track) return [];
+    return findRelatedTracks(track, catalog, 4);
+  }, [track, catalog]);
+
+  if (!isOpen || !track || !artistProfile) return null;
+
+  const effectiveDuration =
+    currentTime > 0 && duration > 0 ? duration : (track.durationSeconds || duration);
   const displayTime = isSeeking ? seekVal : currentTime;
-  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (displayTime / duration) * 100)) : 0;
+  const progressPercent =
+    effectiveDuration > 0 ? Math.min(100, Math.max(0, (displayTime / effectiveDuration) * 100)) : 0;
 
   return (
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Expanded Album Artwork"
-      className="fixed inset-0 z-50 flex flex-col justify-between overflow-y-auto bg-black/95 text-white animate-in fade-in duration-200"
+      aria-label={`Track and artist details for ${track.title}`}
+      className="fixed inset-0 z-50 flex flex-col bg-[#12100E]/98 text-[#F5F0E8] overflow-hidden"
     >
-      {/* Blurred Ambient Background Effect */}
+      {/* Ambient backdrop */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <img
           src={imgSrc || track.thumbnail}
           alt=""
-          className="w-full h-full object-cover blur-3xl scale-125 opacity-30 saturate-150 transition-all duration-700"
+          referrerPolicy="no-referrer"
+          className="w-full h-full object-cover blur-3xl scale-125 opacity-20 sepia-[.25]"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-black/80" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#12100E]/85 via-[#12100E]/90 to-[#12100E]" />
       </div>
 
-      {/* Top Bar with Dismiss Button */}
-      <div className="p-3 sm:p-6 flex items-center justify-between shrink-0">
+      {/* Sticky Top Header */}
+      <div className="px-4 sm:px-6 py-3.5 flex items-center justify-between border-b border-[#EAE0D0]/[0.08] shrink-0 bg-[#12100E]/75 backdrop-blur-xl">
         <button
+          type="button"
           onClick={onClose}
-          aria-label="Close expanded artwork view"
-          className="w-10 h-10 rounded-full bg-black/40 hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+          aria-label="Close track view"
+          className="w-10 h-10 rounded-xl bg-[#EAE0D0]/[0.06] hover:bg-[#EAE0D0]/[0.12] text-[#C8BEB0] hover:text-[#F5F0E8] flex items-center justify-center transition-colors cursor-pointer"
         >
-          <ChevronDown className="w-6 h-6" />
+          <ChevronDown className="w-5 h-5" />
         </button>
 
-        <div className="flex flex-col items-center">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-neutral-400">
-            Playing From Playlist
+        <div className="flex flex-col items-center min-w-0 px-3">
+          <span className="text-[11px] font-medium text-[#DFCCB0] truncate">
+            Now Playing{track.country ? ` · ${track.country}` : ''}
           </span>
-          <span className="text-xs font-semibold text-white truncate max-w-[180px] sm:max-w-md">
-            {track.album || 'SpotiTube Collection'}
+          <span className="text-xs font-semibold text-[#F5F0E8] truncate max-w-[220px] sm:max-w-md">
+            {track.album && track.album !== 'Studio Single' ? track.album : artistProfile.name}
           </span>
         </div>
 
         <button
+          type="button"
           onClick={onClose}
           aria-label="Close"
-          className="w-10 h-10 rounded-full bg-black/40 hover:bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+          className="w-10 h-10 rounded-xl bg-[#EAE0D0]/[0.06] hover:bg-[#EAE0D0]/[0.12] text-[#C8BEB0] hover:text-[#F5F0E8] flex items-center justify-center transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
       </div>
 
-      {/* Center Artwork & Track Details */}
-      <div className="flex-1 flex flex-col items-center justify-center px-5 sm:px-6 py-2 max-w-lg mx-auto w-full">
-        {/* Album Artwork Card */}
-        <div className="relative group aspect-square w-full max-w-[260px] sm:max-w-[380px] md:max-w-[420px] rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] border border-white/10 mb-5 sm:mb-6 bg-neutral-900">
-          <img
-            src={imgSrc}
-            onError={() => {
-              if (track) setImgSrc(track.thumbnail);
-            }}
-            alt={track.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-        </div>
-
-        {/* Track Title, Artist & Like */}
-        <div className="w-full flex items-center justify-between mb-4">
-          <div className="truncate pr-4 flex-1">
-            <h1 className="text-xl sm:text-3xl font-extrabold text-white tracking-tight truncate">
-              {track.title}
-            </h1>
-            <p className="text-sm sm:text-lg text-neutral-400 font-semibold truncate mt-0.5">
-              {track.artist}
-            </p>
-          </div>
-
-          <button
-            onClick={() => onToggleLike(track)}
-            aria-label={isLiked ? "Unlike track" : "Like track"}
-            className={`w-11 h-11 rounded-full flex items-center justify-center transition-transform hover:scale-110 active:scale-95 cursor-pointer shrink-0 ${
-              isLiked ? 'text-[#1db954]' : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Heart className={`w-7 h-7 ${isLiked ? 'fill-current' : ''}`} />
-          </button>
-        </div>
-
-        {/* Seekbar */}
-        <div className="w-full space-y-1.5 mb-4">
-          <div className="relative w-full group flex items-center">
-            <div className="w-full h-1.5 bg-neutral-700/80 rounded-full overflow-hidden group-hover:h-2 transition-all">
-              <div
-                className="h-full bg-white group-hover:bg-[#1db954] rounded-full transition-colors"
-                style={{ width: `${progressPercent}%` }}
+      {/* Scrollable Studio Two-Column Workspace */}
+      <div className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-10 py-6">
+        <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
+          {/* LEFT: Artwork, Seekbar & Transport Controls */}
+          <div className="lg:col-span-5 lg:sticky lg:top-2 flex flex-col items-center">
+            <div className="aspect-square w-full max-w-[290px] sm:max-w-[340px] lg:max-w-full rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.85)] border border-[#EAE0D0]/12 mb-5 bg-[#1B1815]">
+              <img
+                src={imgSrc || track.thumbnail}
+                referrerPolicy="no-referrer"
+                onError={() => {
+                  if (track) {
+                    setImgSrc(`https://i.ytimg.com/vi/${track.youtubeId}/mqdefault.jpg`);
+                  }
+                }}
+                alt={track.title}
+                className="w-full h-full object-cover"
               />
             </div>
-            <input
-              type="range"
-              min={0}
-              max={duration || 100}
-              step={1}
-              value={displayTime}
-              onChange={(e) => setSeekVal(parseFloat(e.target.value))}
-              onMouseDown={() => {
-                setIsSeeking(true);
-                setSeekVal(currentTime);
-              }}
-              onMouseUp={() => {
-                setIsSeeking(false);
-                onSeek(seekVal);
-              }}
-              onTouchStart={() => {
-                setIsSeeking(true);
-                setSeekVal(currentTime);
-              }}
-              onTouchEnd={() => {
-                setIsSeeking(false);
-                onSeek(seekVal);
-              }}
-              aria-label="Track progress seekbar"
-              className="absolute inset-0 w-full opacity-0 cursor-pointer"
-            />
+
+            <div className="w-full flex items-center justify-between gap-3 mb-4">
+              <div className="min-w-0 flex-1">
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-[#F5F0E8] tracking-tight truncate">
+                  {track.title}
+                </h1>
+                <p className="text-sm text-[#C8BEB0] font-medium truncate mt-0.5">
+                  {track.artist}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => onToggleLike(track)}
+                aria-label={isLiked ? 'Unlike track' : 'Like track'}
+                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
+                  isLiked
+                    ? 'text-[#DFCCB0] bg-[#D8C3A5]/15 border border-[#D8C3A5]/30'
+                    : 'text-[#C8BEB0] hover:text-[#F5F0E8] bg-[#EAE0D0]/[0.06] border border-[#EAE0D0]/12'
+                }`}
+              >
+                <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
+              </button>
+            </div>
+
+            {/* Seekbar */}
+            <div className="w-full space-y-1.5 mb-5">
+              <div className="relative w-full group flex items-center">
+                <div className="w-full h-1.5 bg-[#EAE0D0]/15 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-[#D8C3A5] rounded-full transition-colors"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={effectiveDuration || 100}
+                  step={1}
+                  value={displayTime}
+                  onChange={(e) => setSeekVal(parseFloat(e.target.value))}
+                  onMouseDown={() => {
+                    setIsSeeking(true);
+                    setSeekVal(currentTime);
+                  }}
+                  onMouseUp={() => {
+                    setIsSeeking(false);
+                    onSeek(seekVal);
+                  }}
+                  onTouchStart={() => {
+                    setIsSeeking(true);
+                    setSeekVal(currentTime);
+                  }}
+                  onTouchEnd={() => {
+                    setIsSeeking(false);
+                    onSeek(seekVal);
+                  }}
+                  aria-label="Track progress seekbar"
+                  className="absolute inset-0 w-full opacity-0 cursor-pointer"
+                />
+              </div>
+              <div className="flex justify-between text-xs font-mono tabular-nums text-[#9E9384]">
+                <span>{formatDuration(displayTime)}</span>
+                <span>{formatDuration(effectiveDuration)}</span>
+              </div>
+            </div>
+
+            {/* Transport Controls */}
+            <div className="w-full flex items-center justify-between px-1 py-2 rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08]">
+              <button
+                type="button"
+                onClick={onToggleShuffle}
+                aria-label="Toggle shuffle"
+                className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
+                  isShuffle ? 'text-[#DFCCB0] bg-[#D8C3A5]/12' : 'text-[#9E9384] hover:text-[#F5F0E8]'
+                }`}
+              >
+                <Shuffle className="w-4 h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onPrevious}
+                aria-label="Previous track"
+                className="text-[#C8BEB0] hover:text-[#F5F0E8] transition-colors cursor-pointer p-2.5"
+              >
+                <SkipBack className="w-6 h-6 fill-current" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onPlayPause}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                className="w-14 h-14 rounded-2xl bg-[#D8C3A5] hover:bg-[#E4D3BA] text-[#12100E] flex items-center justify-center active:scale-95 transition-transform shadow-lg cursor-pointer"
+              >
+                {isPlaying ? (
+                  <Pause className="w-6 h-6 fill-current" />
+                ) : (
+                  <Play className="w-6 h-6 fill-current translate-x-0.5" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={onNext}
+                aria-label="Next track"
+                className="text-[#C8BEB0] hover:text-[#F5F0E8] transition-colors cursor-pointer p-2.5"
+              >
+                <SkipForward className="w-6 h-6 fill-current" />
+              </button>
+
+              <button
+                type="button"
+                onClick={onToggleRepeat}
+                aria-label={`Toggle repeat (currently ${repeatMode})`}
+                className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
+                  repeatMode !== 'off' ? 'text-[#DFCCB0] bg-[#D8C3A5]/12' : 'text-[#9E9384] hover:text-[#F5F0E8]'
+                }`}
+              >
+                {repeatMode === 'one' ? (
+                  <Repeat1 className="w-4 h-4" />
+                ) : (
+                  <Repeat className="w-4 h-4" />
+                )}
+              </button>
+            </div>
           </div>
-          <div className="flex justify-between text-xs font-mono text-neutral-400">
-            <span>{formatDuration(displayTime)}</span>
-            <span>{formatDuration(duration)}</span>
+
+          {/* RIGHT: Editorial Artist & Track Inspector */}
+          <div className="lg:col-span-7 space-y-5">
+            {/* About the Artist Card */}
+            <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] overflow-hidden">
+              <div className="p-5 sm:p-6 space-y-4">
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {liveArtistData?.thumbnail && !avatarFailed ? (
+                        <img
+                          src={liveArtistData.thumbnail}
+                          alt={artistProfile.name}
+                          referrerPolicy="no-referrer"
+                          onError={() => setAvatarFailed(true)}
+                          className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl object-cover shrink-0 bg-[#24201B] border border-[#EAE0D0]/12"
+                        />
+                      ) : (
+                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl bg-[#D8C3A5]/12 border border-[#D8C3A5]/25 flex items-center justify-center shrink-0 text-[#DFCCB0]">
+                          <UserRound className="w-6 h-6 sm:w-7 sm:h-7" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-[#DFCCB0]">About the Artist</div>
+                        <h2 className="font-display text-lg sm:text-2xl font-bold text-[#F5F0E8] truncate">
+                          {artistProfile.name}
+                        </h2>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onSearchArtist(artistProfile.name);
+                        onClose();
+                      }}
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#EAE0D0]/[0.06] hover:bg-[#D8C3A5] hover:text-[#12100E] text-[#E4DDD2] text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                      <span>All Tracks</span>
+                    </button>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-[#9E9384]">
+                    <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                      <MapPin className="w-3.5 h-3.5 text-[#DFCCB0] shrink-0" />
+                      <span>{artistProfile.origin}</span>
+                    </span>
+                    <span className="hidden sm:inline" aria-hidden="true">·</span>
+                    <span className="whitespace-nowrap">{artistProfile.activeYears}</span>
+                  </div>
+                </div>
+
+                {isLoadingArtist ? (
+                  <p className="text-xs sm:text-sm text-[#9E9384] animate-pulse">
+                    Loading artist biography...
+                  </p>
+                ) : (
+                  <p className="text-xs sm:text-sm text-[#E4DDD2] leading-relaxed">
+                    {artistProfile.bio}
+                  </p>
+                )}
+
+                <div className="pt-3 border-t border-[#EAE0D0]/[0.07] space-y-2">
+                  <div className="text-xs font-semibold text-[#C8BEB0] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#DFCCB0]" />
+                    <span>Musical Identity &amp; What They Create</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-[#C8BEB0] leading-relaxed">
+                    {artistProfile.craftSummary}
+                  </p>
+                  <div className="text-xs text-[#9E9384] pt-1">
+                    {artistProfile.roles.join(' · ')} — {artistProfile.genres.join(' · ')}
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* Discography / Notable Works & Track Credits */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#DFCCB0]">
+                  <Disc3 className="w-4 h-4" />
+                  <span>Notable Releases &amp; Albums</span>
+                </div>
+                <ul className="space-y-2 text-xs sm:text-sm text-[#E4DDD2]">
+                  {artistProfile.notableWorks.map((work, idx) => (
+                    <li
+                      key={work}
+                      className="flex items-baseline gap-2.5 border-b border-[#EAE0D0]/[0.06] pb-1.5 last:border-b-0 last:pb-0"
+                    >
+                      <span className="font-mono tabular-nums text-[11px] text-[#8F8476]">
+                        {String(idx + 1).padStart(2, '0')}
+                      </span>
+                      <span className="font-medium truncate">{work}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#DFCCB0]">
+                  <Music2 className="w-4 h-4" />
+                  <span>Track Credits</span>
+                </div>
+                <dl className="space-y-2 text-xs">
+                  <div className="flex justify-between gap-3 border-b border-[#EAE0D0]/[0.06] pb-1.5">
+                    <dt className="text-[#9E9384]">Performing Artist</dt>
+                    <dd className="text-[#F5F0E8] font-medium text-right truncate">{track.artist}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-[#EAE0D0]/[0.06] pb-1.5">
+                    <dt className="text-[#9E9384]">Release</dt>
+                    <dd className="text-[#F5F0E8] font-medium text-right truncate">
+                      {track.album || 'Studio Single'}
+                    </dd>
+                  </div>
+                  <div className="flex justify-between gap-3 border-b border-[#EAE0D0]/[0.06] pb-1.5">
+                    <dt className="text-[#9E9384]">Label / Imprint</dt>
+                    <dd className="text-[#F5F0E8] font-medium text-right truncate">{artistProfile.label}</dd>
+                  </div>
+                  <div className="flex justify-between gap-3">
+                    <dt className="text-[#9E9384]">Duration</dt>
+                    <dd className="text-[#F5F0E8] font-mono tabular-nums font-medium">{track.durationFormatted}</dd>
+                  </div>
+                </dl>
+              </section>
+            </div>
+
+            {/* Related Tracks & Same Scene */}
+            {relatedTracks.length > 0 && (
+              <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-display text-sm sm:text-base font-bold text-[#F5F0E8]">
+                    More in This Sound &amp; Scene
+                  </h3>
+                  <span className="text-xs text-[#9E9384]">Tap to play</span>
+                </div>
+                <div className="divide-y divide-[#EAE0D0]/[0.06]">
+                  {relatedTracks.map((rel) => (
+                    <button
+                      type="button"
+                      key={rel.id}
+                      onClick={() => onPlayTrack(rel, [rel, ...relatedTracks])}
+                      className="w-full py-2.5 flex items-center gap-3 text-left hover:bg-[#EAE0D0]/[0.04] px-2 -mx-2 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <CoverImage
+                        src={rel.thumbnail}
+                        alt={rel.title}
+                        youtubeId={rel.youtubeId}
+                        className="w-10 h-10 rounded-lg object-cover shrink-0 bg-[#24201B]"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs sm:text-sm font-semibold text-[#F5F0E8] group-hover:text-[#DFCCB0] truncate">
+                          {rel.title}
+                        </div>
+                        <div className="text-[11px] text-[#9E9384] truncate">
+                          {rel.artist}
+                          {rel.country ? ` · ${rel.country}` : ''}
+                        </div>
+                      </div>
+                      <span className="text-xs font-mono tabular-nums text-[#8F8476] shrink-0">
+                        {rel.durationFormatted}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
-        </div>
-
-        {/* Playback Controls (Shuffle, Prev, Play, Next, 3-State Repeat) */}
-        <div className="w-full flex items-center justify-between px-2">
-          {/* Smart Shuffle */}
-          <button
-            onClick={onToggleShuffle}
-            aria-label="Toggle shuffle"
-            className={`p-2 transition-colors cursor-pointer relative ${
-              isShuffle ? 'text-[#1db954]' : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            <Shuffle className="w-5 h-5" />
-            {isShuffle && (
-              <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1db954] rounded-full" />
-            )}
-          </button>
-
-          {/* Previous Track */}
-          <button
-            onClick={onPrevious}
-            aria-label="Previous track"
-            className="text-neutral-300 hover:text-white transition-colors cursor-pointer p-2"
-          >
-            <SkipBack className="w-7 h-7 fill-current" />
-          </button>
-
-          {/* Large Circular Play/Pause Button */}
-          <button
-            onClick={onPlayPause}
-            aria-label={isPlaying ? "Pause" : "Play"}
-            className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform shadow-2xl cursor-pointer"
-          >
-            {isPlaying ? (
-              <Pause className="w-8 h-8 fill-current text-black" />
-            ) : (
-              <Play className="w-8 h-8 fill-current text-black translate-x-0.5" />
-            )}
-          </button>
-
-          {/* Next Track */}
-          <button
-            onClick={onNext}
-            aria-label="Next track"
-            className="text-neutral-300 hover:text-white transition-colors cursor-pointer p-2"
-          >
-            <SkipForward className="w-7 h-7 fill-current" />
-          </button>
-
-          {/* 3-State Repeat Toggle */}
-          <button
-            onClick={onToggleRepeat}
-            aria-label={`Toggle repeat (currently ${repeatMode})`}
-            className={`p-2 transition-colors cursor-pointer relative ${
-              repeatMode !== 'off' ? 'text-[#1db954]' : 'text-neutral-400 hover:text-white'
-            }`}
-          >
-            {repeatMode === 'one' ? (
-              <Repeat1 className="w-5 h-5" />
-            ) : (
-              <Repeat className="w-5 h-5" />
-            )}
-            {repeatMode !== 'off' && (
-              <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1db954] rounded-full" />
-            )}
-          </button>
         </div>
       </div>
-      <div className="pb-4" />
     </div>
   );
 };

@@ -3,16 +3,20 @@ export interface LyricLine {
   text: string;
 }
 
+export type WorldRegion = 'americas' | 'europe' | 'africa' | 'asia' | 'global';
+
 export interface Track {
   id: string; // unique internal id or youtube video id
   youtubeId: string;
   title: string;
   artist: string;
   album?: string;
+  country?: string;
+  region?: WorldRegion;
   thumbnail: string;
   durationSeconds: number;
   durationFormatted: string;
-  genre: 'chaabi' | 'rai' | 'rap' | 'global' | 'pop' | 'other';
+  genre: 'global' | 'pop' | 'hiphop' | 'afrobeats' | 'latin' | 'electronic' | 'kpop' | 'chaabi' | 'rai' | 'rap' | 'other';
   views?: string;
   lyrics?: LyricLine[];
 }
@@ -21,6 +25,7 @@ export interface Playlist {
   id: string;
   name: string;
   description: string;
+  regionLabel?: string;
   coverImage: string;
   tracks: Track[];
   isCustom?: boolean;

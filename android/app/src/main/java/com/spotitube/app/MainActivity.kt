@@ -48,7 +48,7 @@ class MainActivity : AppCompatActivity() {
             .build()
 
         webView = BackgroundWebView(this).apply {
-            setBackgroundColor(0xFF121212.toInt())
+            setBackgroundColor(0xFF12100E.toInt())
             isFocusable = true
             isFocusableInTouchMode = true
             settings.javaScriptEnabled = true

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { loadYouTubeIFrameAPI } from '../services/youtubeApi';
 import { YTPlayerInstance } from '../types/youtube';
 import { Track } from '../types/music';
-import { X, Minimize2, Maximize2 } from 'lucide-react';
 import {
   buildMediaMetadataInit,
   registerPrimaryAudioElement,
@@ -29,8 +28,6 @@ interface YouTubePlayerEmbedProps {
   onNext?: () => void;
   onPrevious?: () => void;
   onSeek?: (seconds: number) => void;
-  isVisible: boolean;
-  onCloseVideo: () => void;
 }
 
 type EngineMode = 'native_audio' | 'youtube_iframe';
@@ -48,9 +45,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   onPlayPause,
   onNext,
   onPrevious,
-  onSeek,
-  isVisible,
-  onCloseVideo
+  onSeek
 }) => {
   const playerRef = useRef<YTPlayerInstance | null>(null);
   const nativeAudioRef = useRef<HTMLAudioElement | null>(null);
@@ -59,7 +54,6 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   const isPlayingRef = useRef<boolean>(isPlaying);
   const volumeRef = useRef<number>(volume);
   const isMutedRef = useRef<boolean>(isMuted);
-  const isVisibleRef = useRef<boolean>(isVisible);
   const onTimeUpdateRef = useRef(onTimeUpdate);
   const onPlayerStateChangeRef = useRef(onPlayerStateChange);
   const onTrackErrorRef = useRef(onTrackError);
@@ -78,7 +72,6 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
 
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [engineMode, setEngineMode] = useState<EngineMode>('youtube_iframe');
-  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     currentTrackRef.current = currentTrack;
@@ -92,10 +85,6 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     volumeRef.current = volume;
     isMutedRef.current = isMuted;
   }, [volume, isMuted]);
-
-  useEffect(() => {
-    isVisibleRef.current = isVisible;
-  }, [isVisible]);
 
   useEffect(() => {
     onTimeUpdateRef.current = onTimeUpdate;
@@ -506,11 +495,6 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       }
     }
 
-    if (isVisibleRef.current) {
-      startOrLoadYouTubeIFrame(currentTrack, 0);
-      return;
-    }
-
     let cancelled = false;
     (async () => {
       let resolvedNativeUrl: string | null = null;
@@ -558,7 +542,6 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       if (
         resolvedNativeUrl &&
         nativeAudioRef.current &&
-        !isVisibleRef.current &&
         currentTrackRef.current?.youtubeId === currentTrack.youtubeId
       ) {
         setActiveEngine('native_audio');
@@ -576,7 +559,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         return;
       }
 
-      // Neither backend nor mirror returned an HTML5 audio stream: release primed keep-alive src and use YT IFrame
+      // Neither backend nor mirror returned an HTML5 audio stream: release primed keep-alive src and use hidden audio iframe
       if (nativeAudioRef.current && engineModeRef.current !== 'native_audio') {
         try {
           nativeAudioRef.current.pause();
@@ -596,17 +579,6 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       cancelled = true;
     };
   }, [currentTrack?.youtubeId]);
-
-  // If user opens Video View while playing in native_audio mode, switch smoothly to YouTube IFrame
-  useEffect(() => {
-    if (isVisible && engineMode === 'native_audio' && currentTrack) {
-      const resumeSec = nativeAudioRef.current?.currentTime || 0;
-      if (nativeAudioRef.current) {
-        nativeAudioRef.current.pause();
-      }
-      startOrLoadYouTubeIFrame(currentTrack, resumeSec);
-    }
-  }, [isVisible]);
 
   // Sync Play / Pause State across active engine
   useEffect(() => {
@@ -715,48 +687,12 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         }}
       />
 
+      {/* Hidden off-screen audio engine */}
       <div
-        className={`fixed transition-all duration-300 rounded-xl overflow-hidden shadow-2xl border border-neutral-700 bg-black ${
-          isVisible
-            ? isExpanded
-              ? 'z-50 bottom-28 right-6 w-[560px] h-[340px]'
-              : 'z-50 bottom-28 right-6 w-[360px] h-[220px]'
-            : '-z-10 bottom-0 right-0 w-[220px] h-[220px] opacity-0 pointer-events-none'
-        }`}
+        aria-hidden="true"
+        className="fixed -z-10 bottom-0 right-0 w-px h-px opacity-0 pointer-events-none overflow-hidden"
       >
-        {/* Floating Header */}
-        {isVisible && (
-          <div className="bg-[#181818]/95 px-3 py-2 flex items-center justify-between text-xs text-white border-b border-neutral-800">
-            <div className="flex items-center gap-2 truncate pr-2">
-              <span className="w-2 h-2 rounded-full bg-[#1db954] animate-pulse" />
-              <span className="font-semibold truncate">
-                {currentTrack ? `${currentTrack.title} • ${currentTrack.artist}` : 'YouTube Video Stream'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                onClick={() => setIsExpanded(!isExpanded)}
-                aria-label={isExpanded ? 'Collapse video' : 'Expand video'}
-                className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-800 transition-colors"
-              >
-                {isExpanded ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              </button>
-              <button
-                onClick={onCloseVideo}
-                aria-label="Hide video player"
-                className="p-1 text-neutral-400 hover:text-white rounded hover:bg-neutral-800 transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Target Mount Element for YouTube IFrame API */}
-        <div className="w-full h-full bg-black">
-          <div id="spotitube-iframe-anchor" className="w-full h-full" />
-        </div>
+        <div id="spotitube-iframe-anchor" className="w-[220px] h-[220px]" />
       </div>
     </>
   );

@@ -20,12 +20,12 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'SpotiTube - Music Discovery',
+          name: 'SpotiTube - Global Music Soundstage',
           short_name: 'SpotiTube',
           description:
-            'Music discovery player with cached track metadata and cover artwork for resilient playback.',
-          theme_color: '#121212',
-          background_color: '#121212',
+            'Global music discovery soundstage with multi-country collections, live search, and offline caching.',
+          theme_color: '#12100E',
+          background_color: '#12100E',
           display: 'standalone',
           start_url: '/',
           scope: '/',
