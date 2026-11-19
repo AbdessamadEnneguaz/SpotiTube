@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Play,
   Pause,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { Track, RepeatMode } from '../types/music';
 import { formatDuration } from '../utils/formatters';
+import { computeSeekProgress } from '../utils/backgroundAudio';
 import { CoverImage } from './CoverImage';
 import { KiddwaveLogo } from './KiddwaveLogo';
 
@@ -76,47 +77,97 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
 }) => {
   const [isSeeking, setIsSeeking] = useState(false);
   const [seekValue, setSeekValue] = useState(0);
+  const seekValueRef = useRef(0);
+  const isSeekingRef = useRef(false);
 
   const displayTime = isSeeking ? seekValue : currentTime;
-  const progressPercent = duration > 0 ? Math.min(100, Math.max(0, (displayTime / duration) * 100)) : 0;
+  const { percent: progressPercent } = computeSeekProgress(displayTime, duration);
   const volumePercent = isMuted ? 0 : volume;
 
-  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSeekValue(parseFloat(e.target.value));
-  };
-
-  const handleSeekMouseDown = () => {
+  const handleSeekStart = () => {
+    if (!currentTrack) return;
+    isSeekingRef.current = true;
+    seekValueRef.current = currentTime;
     setIsSeeking(true);
     setSeekValue(currentTime);
   };
 
-  const handleSeekMouseUp = () => {
+  const handleSeekChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const nextVal = parseFloat(e.target.value);
+    if (!Number.isFinite(nextVal)) return;
+    seekValueRef.current = nextVal;
+    setSeekValue(nextVal);
+    // Support instant single-click / keyboard step changes when pointer isn't mid-drag
+    if (!isSeekingRef.current) {
+      onSeek(nextVal);
+    }
+  };
+
+  const handleSeekCommit = () => {
+    if (!isSeekingRef.current) return;
+    isSeekingRef.current = false;
     setIsSeeking(false);
-    onSeek(seekValue);
+    onSeek(seekValueRef.current);
   };
 
   return (
     <footer className="frame-3d-console backdrop-blur-xl text-[#A39E9F] select-none z-40 relative shrink-0 md:pb-[env(safe-area-inset-bottom)]">
-      {/* Top Edge Scrubber Line */}
-      <div className="relative w-full h-1 bg-white/10 group cursor-pointer">
+      {/* Top Edge Scrubber Line with Interactive Leading Circle */}
+      <div className="relative w-full h-1.5 bg-white/15 group cursor-pointer">
         <div
-          className="h-full bg-[#EF4444] transition-all duration-150"
+          className={`h-full bg-gradient-to-r from-[#DC2626] to-[#FF443A] ${
+            isSeeking ? 'transition-none' : 'transition-[width] duration-150'
+          }`}
           style={{ width: `${progressPercent}%` }}
         />
+
+        {/* Live Seek Tooltip While Dragging */}
+        {currentTrack && isSeeking && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -top-8 px-2 py-0.5 rounded-md bg-[#161112] border border-[#EF4444]/60 text-[10px] font-mono font-semibold text-white shadow-[0_6px_16px_rgba(0,0,0,0.85)] tabular-nums whitespace-nowrap -translate-x-1/2"
+            style={{
+              left: `clamp(24px, ${progressPercent}%, calc(100% - 24px))`
+            }}
+          >
+            {formatDuration(displayTime)}
+          </div>
+        )}
+
+        {/* Draggable Seek Circle Thumb ("Daira") at Leading Edge */}
+        <div
+          data-testid="player-seek-thumb"
+          aria-hidden="true"
+          className={`pointer-events-none absolute top-1/2 -translate-y-1/2 rounded-full transition-transform ${
+            currentTrack
+              ? isSeeking
+                ? 'w-4 h-4 bg-white border-2 border-[#EF4444] shadow-[0_0_14px_rgba(239,68,68,0.95)] scale-110'
+                : 'w-3.5 h-3.5 bg-white border-2 border-[#EF4444] shadow-[0_0_10px_rgba(239,68,68,0.75)] group-hover:scale-125'
+              : 'w-2.5 h-2.5 bg-white/45 border border-white/30'
+          }`}
+          style={{
+            left: `calc(${progressPercent}% - ${(progressPercent / 100) * (isSeeking ? 16 : currentTrack ? 14 : 10)}px)`
+          }}
+        />
+
         <input
           type="range"
           min={0}
-          max={duration || 100}
+          max={duration > 0 ? duration : 100}
           step={1}
           value={displayTime}
           onChange={handleSeekChange}
-          onMouseDown={handleSeekMouseDown}
-          onMouseUp={handleSeekMouseUp}
-          onTouchStart={handleSeekMouseDown}
-          onTouchEnd={handleSeekMouseUp}
+          onPointerDown={handleSeekStart}
+          onPointerUp={handleSeekCommit}
+          onPointerCancel={handleSeekCommit}
+          onMouseDown={handleSeekStart}
+          onMouseUp={handleSeekCommit}
+          onTouchStart={handleSeekStart}
+          onTouchEnd={handleSeekCommit}
+          onBlur={handleSeekCommit}
           disabled={!currentTrack}
           aria-label="Track progress seekbar"
-          className="absolute -top-2 inset-x-0 w-full h-5 opacity-0 cursor-pointer disabled:cursor-not-allowed"
+          className="absolute -top-3 inset-x-0 w-full h-7 opacity-0 cursor-pointer disabled:cursor-not-allowed touch-none z-10"
         />
       </div>
 

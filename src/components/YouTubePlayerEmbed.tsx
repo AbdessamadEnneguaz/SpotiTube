@@ -4,6 +4,7 @@ import { YTPlayerInstance } from '../types/youtube';
 import { Track } from '../types/music';
 import {
   buildMediaMetadataInit,
+  parseMediaBridgeCommand,
   registerPrimaryAudioElement,
   setAudioKeepAlivePlaying,
   shouldPreserveIntentOnVisibilityPause
@@ -173,13 +174,16 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     });
   }, [currentTrack]);
 
-  // Listen to native Android MediaStyle notification buttons (Play / Pause / Next / Previous / Stop)
+  // Listen to native Android MediaStyle notification buttons & lockscreen seekbar
   useEffect(() => {
     const win = window as unknown as {
       __spotitubeMediaControl?: (cmd: string) => void;
     };
-    win.__spotitubeMediaControl = (cmd: string) => {
-      if (cmd === 'play') {
+    win.__spotitubeMediaControl = (rawCmd: string) => {
+      const parsed = parseMediaBridgeCommand(rawCmd);
+      if (!parsed) return;
+
+      if (parsed.type === 'play') {
         if (!isPlayingRef.current) {
           onPlayPauseRef.current?.();
         }
@@ -192,16 +196,18 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
             // ignore
           }
         }
-      } else if (cmd === 'pause' || cmd === 'stop') {
+      } else if (parsed.type === 'pause' || parsed.type === 'stop') {
         if (isPlayingRef.current) {
           onPlayPauseRef.current?.();
         }
-      } else if (cmd === 'toggle') {
+      } else if (parsed.type === 'toggle') {
         onPlayPauseRef.current?.();
-      } else if (cmd === 'next') {
+      } else if (parsed.type === 'next') {
         onNextRef.current?.();
-      } else if (cmd === 'previous') {
+      } else if (parsed.type === 'previous') {
         onPreviousRef.current?.();
+      } else if (parsed.type === 'seek') {
+        onSeekRef.current?.(parsed.seconds);
       }
     };
     return () => {
@@ -493,22 +499,41 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       if (cur > 0 || dur > 0) {
         onTimeUpdateRef.current(cur, dur);
         const now = Date.now();
-        if (
-          now - lastPositionUpdateRef.current > 1000 &&
-          dur > 0 &&
-          typeof navigator !== 'undefined' &&
-          'mediaSession' in navigator &&
-          typeof navigator.mediaSession.setPositionState === 'function'
-        ) {
+        if (now - lastPositionUpdateRef.current > 1000 && dur > 0) {
           lastPositionUpdateRef.current = now;
+          const clampedSec = Math.min(cur, dur);
+          if (
+            typeof navigator !== 'undefined' &&
+            'mediaSession' in navigator &&
+            typeof navigator.mediaSession.setPositionState === 'function'
+          ) {
+            try {
+              navigator.mediaSession.setPositionState({
+                duration: dur,
+                playbackRate: isPlayingRef.current ? 1 : 0,
+                position: clampedSec
+              });
+            } catch {
+              // ignore
+            }
+          }
           try {
-            navigator.mediaSession.setPositionState({
-              duration: dur,
-              playbackRate: 1,
-              position: Math.min(cur, dur)
-            });
+            const win = window as unknown as {
+              KiddwaveAndroid?: {
+                updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
+              };
+              SpotiTubeAndroid?: {
+                updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
+              };
+            };
+            const androidBridge = win.KiddwaveAndroid || win.SpotiTubeAndroid;
+            androidBridge?.updatePlaybackPosition?.(
+              Math.max(0, Math.round(dur * 1000)),
+              Math.max(0, Math.round(clampedSec * 1000)),
+              isPlayingRef.current
+            );
           } catch {
-            // ignore
+            // ignore outside Android wrapper
           }
         }
       }
@@ -838,9 +863,52 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     }
   }, [volume, isMuted, isPlayerReady]);
 
-  // Sync Seek target across active engine
+  // Sync Seek target across active engine & immediately update external media notification seekbar
   useEffect(() => {
     if (seekTarget === null) return;
+
+    const syncExternalSeekPosition = (posSec: number) => {
+      const trackDurSec =
+        (engineModeRef.current === 'native_audio' && nativeAudioRef.current && Number.isFinite(nativeAudioRef.current.duration)
+          ? nativeAudioRef.current.duration
+          : playerRef.current?.getDuration?.() || currentTrackRef.current?.durationSeconds) || 0;
+      if (trackDurSec > 0) {
+        const clampedSec = Math.min(trackDurSec, Math.max(0, posSec));
+        if (
+          typeof navigator !== 'undefined' &&
+          'mediaSession' in navigator &&
+          typeof navigator.mediaSession.setPositionState === 'function'
+        ) {
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: trackDurSec,
+              playbackRate: isPlayingRef.current ? 1 : 0,
+              position: clampedSec
+            });
+          } catch {
+            // ignore
+          }
+        }
+        try {
+          const win = window as unknown as {
+            KiddwaveAndroid?: {
+              updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
+            };
+            SpotiTubeAndroid?: {
+              updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
+            };
+          };
+          const androidBridge = win.KiddwaveAndroid || win.SpotiTubeAndroid;
+          androidBridge?.updatePlaybackPosition?.(
+            Math.max(0, Math.round(trackDurSec * 1000)),
+            Math.max(0, Math.round(clampedSec * 1000)),
+            isPlayingRef.current
+          );
+        } catch {
+          // ignore outside Android wrapper
+        }
+      }
+    };
 
     if (engineMode === 'native_audio' && nativeAudioRef.current) {
       try {
@@ -848,6 +916,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       } catch {
         // ignore
       }
+      syncExternalSeekPosition(seekTarget);
       onClearSeek();
       return;
     }
@@ -862,6 +931,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       } catch (e) {
         console.warn('Seek error:', e);
       }
+      syncExternalSeekPosition(seekTarget);
       onClearSeek();
     }
   }, [seekTarget, isPlayerReady, engineMode]);

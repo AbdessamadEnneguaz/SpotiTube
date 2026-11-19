@@ -195,3 +195,54 @@ export function setAudioKeepAlivePlaying(active: boolean): void {
     // ignore transient audio state errors
   }
 }
+
+export type MediaBridgeCommand =
+  | { type: 'play' | 'pause' | 'stop' | 'toggle' | 'next' | 'previous' }
+  | { type: 'seek'; seconds: number };
+
+const MAX_SEEK_MS = 12 * 3600 * 1000;
+
+/**
+ * Parses commands sent by the native Android MediaStyle notification bar
+ * (including `seek:<positionMs>` from dragging the lockscreen/notification circle).
+ */
+export function parseMediaBridgeCommand(rawCmd: string): MediaBridgeCommand | null {
+  const cmd = rawCmd.trim();
+  if (!cmd) return null;
+
+  if (
+    cmd === 'play' ||
+    cmd === 'pause' ||
+    cmd === 'stop' ||
+    cmd === 'toggle' ||
+    cmd === 'next' ||
+    cmd === 'previous'
+  ) {
+    return { type: cmd };
+  }
+
+  if (cmd.startsWith('seek:')) {
+    const rawMs = Number(cmd.slice(5));
+    if (!Number.isFinite(rawMs) || rawMs < 0) return null;
+    const clampedMs = Math.min(rawMs, MAX_SEEK_MS);
+    return { type: 'seek', seconds: clampedMs / 1000 };
+  }
+
+  return null;
+}
+
+/**
+ * Computes clamped seekbar percentage (0..100) and clamped timestamp for PlayerBar UI.
+ */
+export function computeSeekProgress(currentTime: number, duration: number): {
+  percent: number;
+  clampedTime: number;
+} {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return { percent: 0, clampedTime: 0 };
+  }
+  const safeTime = Number.isFinite(currentTime) ? Math.min(duration, Math.max(0, currentTime)) : 0;
+  const percent = Math.min(100, Math.max(0, (safeTime / duration) * 100));
+  return { percent, clampedTime: safeTime };
+}
+

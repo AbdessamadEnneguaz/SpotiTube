@@ -15,6 +15,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
+import android.os.SystemClock
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
 import android.support.v4.media.session.PlaybackStateCompat
@@ -87,6 +88,19 @@ class BackgroundAudioService : Service() {
                     dispatchMediaCommand("previous")
                 }
 
+                override fun onSeekTo(pos: Long) {
+                    val clampedPos = if (currentDurationMs > 0L) {
+                        pos.coerceIn(0L, currentDurationMs)
+                    } else {
+                        pos.coerceAtLeast(0L)
+                    }
+                    if (hasActiveTrack) {
+                        currentPositionMs = clampedPos
+                        syncMediaSessionPlaybackState()
+                    }
+                    dispatchMediaCommand("seek:$clampedPos")
+                }
+
                 override fun onStop() {
                     dispatchMediaCommand("stop")
                     stopPlaybackService()
@@ -127,6 +141,21 @@ class BackgroundAudioService : Service() {
             }
             ACTION_PREVIOUS -> {
                 dispatchMediaCommand("previous")
+                return START_STICKY
+            }
+            ACTION_UPDATE_POSITION -> {
+                if (!hasActiveTrack) {
+                    return START_NOT_STICKY
+                }
+                val newDur = intent.getLongExtra(EXTRA_DURATION_MS, currentDurationMs).coerceAtLeast(0L)
+                val newPos = intent.getLongExtra(EXTRA_POSITION_MS, currentPositionMs).coerceAtLeast(0L)
+                isCurrentlyPlaying = intent.getBooleanExtra(EXTRA_IS_PLAYING, isCurrentlyPlaying)
+                currentPositionMs = if (newDur > 0L) newPos.coerceAtMost(newDur) else newPos
+                if (newDur > 0L && newDur != currentDurationMs) {
+                    currentDurationMs = newDur
+                    syncMediaSessionMetadata()
+                }
+                syncMediaSessionPlaybackState()
                 return START_STICKY
             }
         }
@@ -193,13 +222,15 @@ class BackgroundAudioService : Service() {
         }
     }
 
-    private fun syncMediaSessionAndNotification() {
-        val artwork = if (currentArtworkUrl.isNotEmpty() && currentArtworkUrl == cachedArtworkUrl) {
+    private fun currentArtworkBitmap(): Bitmap? {
+        return if (currentArtworkUrl.isNotEmpty() && currentArtworkUrl == cachedArtworkUrl) {
             cachedArtworkBitmap ?: defaultArtworkBitmap
         } else {
             defaultArtworkBitmap
         }
+    }
 
+    private fun syncMediaSessionMetadata(artwork: Bitmap? = currentArtworkBitmap()) {
         val metadataBuilder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
@@ -213,7 +244,9 @@ class BackgroundAudioService : Service() {
         }
         mediaSession.setMetadata(metadataBuilder.build())
         mediaSession.isActive = true
+    }
 
+    private fun syncMediaSessionPlaybackState() {
         val stateCode = if (isCurrentlyPlaying) {
             PlaybackStateCompat.STATE_PLAYING
         } else {
@@ -223,6 +256,7 @@ class BackgroundAudioService : Service() {
             PlaybackStateCompat.ACTION_PLAY or
                 PlaybackStateCompat.ACTION_PAUSE or
                 PlaybackStateCompat.ACTION_PLAY_PAUSE or
+                PlaybackStateCompat.ACTION_SEEK_TO or
                 PlaybackStateCompat.ACTION_SKIP_TO_NEXT or
                 PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS or
                 PlaybackStateCompat.ACTION_STOP
@@ -235,6 +269,12 @@ class BackgroundAudioService : Service() {
                 stateActions
             )
         )
+    }
+
+    private fun syncMediaSessionAndNotification() {
+        val artwork = currentArtworkBitmap()
+        syncMediaSessionMetadata(artwork)
+        syncMediaSessionPlaybackState()
 
         val notification = buildMediaNotification(artwork)
         val nm = getSystemService(NotificationManager::class.java)
@@ -398,7 +438,7 @@ class BackgroundAudioService : Service() {
         fun build(state: Int, position: Long, speed: Float, actions: Long): PlaybackStateCompat {
             return PlaybackStateCompat.Builder()
                 .setActions(actions)
-                .setState(state, position, speed)
+                .setState(state, position, speed, SystemClock.elapsedRealtime())
                 .build()
         }
     }
@@ -407,6 +447,7 @@ class BackgroundAudioService : Service() {
         const val CHANNEL_ID = "spotitube_media_bar_v2"
         const val NOTIFICATION_ID = 1001
         const val ACTION_START_OR_UPDATE = "com.spotitube.app.ACTION_START_OR_UPDATE"
+        const val ACTION_UPDATE_POSITION = "com.spotitube.app.ACTION_UPDATE_POSITION"
         const val ACTION_TOGGLE_PLAY_PAUSE = "com.spotitube.app.ACTION_TOGGLE_PLAY_PAUSE"
         const val ACTION_NEXT = "com.spotitube.app.ACTION_NEXT"
         const val ACTION_PREVIOUS = "com.spotitube.app.ACTION_PREVIOUS"

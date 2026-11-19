@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildMediaMetadataInit,
+  computeSeekProgress,
   createKeepAliveWavBuffer,
+  parseMediaBridgeCommand,
   shouldPreserveIntentOnVisibilityPause
 } from './backgroundAudio.ts';
 import { Track } from '../types/music';
@@ -75,4 +77,22 @@ test('createKeepAliveWavBuffer builds valid RIFF/WAVE PCM with inaudible non-zer
   assert.equal(wave, 'WAVE');
   assert.equal(view.getInt16(44, true), 1);
   assert.equal(view.getInt16(46, true), -1);
+});
+
+test('parseMediaBridgeCommand parses transport and seek:<ms> commands safely', () => {
+  assert.deepEqual(parseMediaBridgeCommand('play'), { type: 'play' });
+  assert.deepEqual(parseMediaBridgeCommand('pause'), { type: 'pause' });
+  assert.deepEqual(parseMediaBridgeCommand('seek:45000'), { type: 'seek', seconds: 45 });
+  assert.deepEqual(parseMediaBridgeCommand('seek:0'), { type: 'seek', seconds: 0 });
+  assert.equal(parseMediaBridgeCommand('seek:-100'), null);
+  assert.equal(parseMediaBridgeCommand('seek:notanumber'), null);
+  assert.equal(parseMediaBridgeCommand('unknown_cmd'), null);
+});
+
+test('computeSeekProgress clamps seek percentage cleanly between 0 and 100', () => {
+  assert.deepEqual(computeSeekProgress(0, 200), { percent: 0, clampedTime: 0 });
+  assert.deepEqual(computeSeekProgress(50, 200), { percent: 25, clampedTime: 50 });
+  assert.deepEqual(computeSeekProgress(250, 200), { percent: 100, clampedTime: 200 });
+  assert.deepEqual(computeSeekProgress(-10, 200), { percent: 0, clampedTime: 0 });
+  assert.deepEqual(computeSeekProgress(30, 0), { percent: 0, clampedTime: 0 });
 });

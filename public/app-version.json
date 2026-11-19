@@ -1,5 +1,5 @@
 {
-  "latestApkVersion": "1.2.2",
+  "latestApkVersion": "1.2.3",
   "apkDownloadUrl": "/Kiddwave.apk",
-  "releaseNotes": "Migrated live production backend to kiddwave.vercel.app with instant OTA updates."
+  "releaseNotes": "Added interactive seekbar thumb in bottom player and lock-screen notification bar."
 }

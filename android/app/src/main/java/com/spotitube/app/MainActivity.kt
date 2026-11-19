@@ -405,6 +405,29 @@ class MainActivity : AppCompatActivity() {
         }
 
         @JavascriptInterface
+        fun updatePlaybackPosition(durationMs: Long, positionMs: Long, playing: Boolean) {
+            val safeDuration = durationMs.coerceIn(0L, 12L * 3600L * 1000L)
+            val safePosition = positionMs.coerceIn(0L, 12L * 3600L * 1000L)
+
+            runOnUiThread {
+                val activeUri = try { Uri.parse(webView.url.orEmpty()) } catch (_: Exception) { null }
+                if (!isAllowedAppUri(activeUri)) return@runOnUiThread
+
+                val serviceIntent = Intent(this@MainActivity, BackgroundAudioService::class.java).apply {
+                    action = BackgroundAudioService.ACTION_UPDATE_POSITION
+                    putExtra(BackgroundAudioService.EXTRA_DURATION_MS, safeDuration)
+                    putExtra(BackgroundAudioService.EXTRA_POSITION_MS, safePosition)
+                    putExtra(BackgroundAudioService.EXTRA_IS_PLAYING, playing)
+                }
+                try {
+                    startService(serviceIntent)
+                } catch (_: Exception) {
+                    // Safe no-op when background service start is restricted
+                }
+            }
+        }
+
+        @JavascriptInterface
         fun setCanGoBack(canGoBack: Boolean) {
             canGoBackInSpa = canGoBack
         }
