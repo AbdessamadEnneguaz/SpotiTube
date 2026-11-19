@@ -27,13 +27,13 @@ export const TrackCard: React.FC<TrackCardProps> = React.memo(({
   return (
     <div
       onClick={() => onInspect(track)}
-      className={`card-interactive group bg-[#1B1815] hover:bg-[#24201B] p-3 rounded-2xl border transition-colors flex flex-col relative ${
+      className={`card-interactive group bg-[#110E0F] hover:bg-[#171213] p-3 rounded-2xl border transition-colors flex flex-col relative ${
         isOfflineDisabled
-          ? 'opacity-45 cursor-not-allowed border-[#EAE0D0]/[0.04]'
-          : 'cursor-pointer border-[#EAE0D0]/[0.07] hover:border-[#EAE0D0]/16'
-      } ${isCurrent && isPlaying ? 'border-[#D8C3A5]/50 bg-[#24201B]' : ''}`}
+          ? 'opacity-45 cursor-not-allowed border-white/[0.04]'
+          : 'cursor-pointer border-white/[0.08] hover:border-[#EF2323]/45'
+      } ${isCurrent && isPlaying ? 'border-[#EF2323]/60 bg-[#171213]' : ''}`}
     >
-      <div className="relative mb-3 aspect-video sm:aspect-[4/3] rounded-xl overflow-hidden bg-[#12100E]">
+      <div className="relative mb-3 aspect-video sm:aspect-[4/3] rounded-xl overflow-hidden bg-[#070607]">
         <CoverImage
           src={track.thumbnail}
           alt={track.title}
@@ -43,9 +43,9 @@ export const TrackCard: React.FC<TrackCardProps> = React.memo(({
             isOfflineDisabled ? 'grayscale' : ''
           }`}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div className="absolute bottom-2 left-2.5 right-2.5 flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium text-[#E4DDD2] truncate">
+          <span className="text-[11px] font-medium text-[#D0CBCC] truncate">
             {track.country || 'World'}
           </span>
           {!isOfflineDisabled && (
@@ -58,8 +58,8 @@ export const TrackCard: React.FC<TrackCardProps> = React.memo(({
               aria-label={`Play ${track.title}`}
               className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                 isCurrent
-                  ? 'bg-[#D8C3A5] text-[#12100E]'
-                  : 'bg-black/75 text-[#F5F0E8] hover:bg-[#D8C3A5] hover:text-[#12100E]'
+                  ? 'bg-[#EF2323] text-white shadow-[0_4px_12px_rgba(239,35,35,0.45)]'
+                  : 'bg-black/75 text-white hover:bg-[#EF2323] hover:text-white'
               }`}
             >
               {isCurrent && isPlaying ? (
@@ -71,10 +71,10 @@ export const TrackCard: React.FC<TrackCardProps> = React.memo(({
           )}
         </div>
       </div>
-      <div className={`font-semibold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#EDE0CC]' : 'text-[#F5F0E8]'}`}>
+      <div className={`font-semibold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#FF443A]' : 'text-[#F4F1F1]'}`}>
         {track.title}
       </div>
-      <div className="text-[11px] sm:text-xs text-[#9E9384] truncate mt-0.5 tabular-nums">
+      <div className="text-[11px] sm:text-xs text-[#A39E9F] truncate mt-0.5 tabular-nums">
         {track.artist} · {track.durationFormatted}
         {isOfflineDisabled ? ' · Online only' : isCached ? ' · Cached' : ''}
       </div>

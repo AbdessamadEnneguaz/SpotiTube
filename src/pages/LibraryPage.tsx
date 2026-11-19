@@ -24,13 +24,13 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
   return (
     <div className="space-y-5 sm:space-y-6">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-[#F5F0E8]">
+        <h1 className="font-display text-xl sm:text-2xl font-extrabold text-white">
           Your Music Library
         </h1>
         <button
           type="button"
           onClick={onOpenCreatePlaylist}
-          className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#D8C3A5] hover:bg-[#E4D3BA] text-[#12100E] font-bold text-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+          className="flex items-center gap-1.5 sm:gap-2 px-3.5 sm:px-4 py-2 rounded-xl bg-[#EF2323] hover:bg-[#FF3830] text-white font-bold text-xs transition-colors cursor-pointer shrink-0 whitespace-nowrap shadow-[0_4px_14px_rgba(239,35,35,0.3)]"
         >
           <PlusSquare className="w-4 h-4" />
           <span>Create Playlist</span>
@@ -40,7 +40,7 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
         <div
           onClick={() => onOpenPlaylist('liked')}
-          className="card-interactive p-5 rounded-2xl bg-[#1B1815] hover:bg-[#24201B] border border-[#D8C3A5]/30 cursor-pointer flex items-center gap-4"
+          className="card-interactive p-5 rounded-2xl bg-gradient-to-br from-[#2B0809] via-[#150B0C] to-[#110E0F] hover:from-[#360A0B] border border-[#EF2323]/40 cursor-pointer flex items-center gap-4"
         >
           <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0">
             <CoverImage
@@ -48,18 +48,18 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
               alt="Saved Favorites"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
-              <Heart className="w-7 h-7 fill-[#D8C3A5] text-[#D8C3A5]" />
+            <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+              <Heart className="w-7 h-7 fill-[#EF2323] text-[#EF2323]" />
             </div>
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+            <h2 className="font-display text-lg sm:text-xl font-bold text-white">
               Saved Favorites
             </h2>
-            <p className="text-xs text-[#9E9384] mt-1 tabular-nums">
+            <p className="text-xs text-[#A39E9F] mt-1 tabular-nums">
               {likedCount} tracks saved locally
             </p>
-            <span className="text-xs font-semibold text-[#DFCCB0] mt-2 inline-block">
+            <span className="text-xs font-semibold text-[#FF443A] mt-2 inline-block">
               Open collection
             </span>
           </div>
@@ -67,19 +67,19 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
 
         <div
           onClick={onOpenRecent}
-          className="card-interactive p-5 rounded-2xl bg-[#1B1815] hover:bg-[#24201B] border border-[#EAE0D0]/[0.08] hover:border-[#D8C3A5]/35 cursor-pointer flex items-center gap-4"
+          className="card-interactive p-5 rounded-2xl bg-[#110E0F] hover:bg-[#171213] border border-white/[0.08] hover:border-[#EF2323]/45 cursor-pointer flex items-center gap-4"
         >
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-[#D8C3A5]/12 border border-[#D8C3A5]/25 flex items-center justify-center shrink-0 text-[#DFCCB0]">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-[#EF2323]/12 border border-[#EF2323]/30 flex items-center justify-center shrink-0 text-[#FF443A]">
             <History className="w-8 h-8" />
           </div>
           <div className="min-w-0 flex-1">
-            <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+            <h2 className="font-display text-lg sm:text-xl font-bold text-white">
               Recent &amp; Cached
             </h2>
-            <p className="text-xs text-[#9E9384] mt-1 tabular-nums">
+            <p className="text-xs text-[#A39E9F] mt-1 tabular-nums">
               {cachedCount} tracks ready offline
             </p>
-            <span className="text-xs font-semibold text-[#DFCCB0] mt-2 inline-block">
+            <span className="text-xs font-semibold text-[#FF443A] mt-2 inline-block">
               Open history
             </span>
           </div>
@@ -89,23 +89,23 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
           <div
             key={pl.id}
             onClick={() => onOpenPlaylist(pl.id)}
-            className="card-interactive p-3.5 sm:p-4 rounded-2xl bg-[#1B1815] hover:bg-[#24201B] cursor-pointer border border-[#EAE0D0]/[0.08] flex items-center gap-3.5"
+            className="card-interactive p-3.5 sm:p-4 rounded-2xl bg-[#110E0F] hover:bg-[#171213] cursor-pointer border border-white/[0.08] hover:border-[#EF2323]/40 flex items-center gap-3.5"
           >
             <CoverImage
               src={pl.coverImage}
               alt={pl.name}
               youtubeId={pl.tracks[0]?.youtubeId}
               loading="lazy"
-              className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-[#12100E]"
+              className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-[#070607]"
             />
             <div className="flex-1 min-w-0">
-              <h3 className="font-display text-sm sm:text-base font-bold text-[#F5F0E8] truncate">
+              <h3 className="font-display text-sm sm:text-base font-bold text-white truncate">
                 {pl.name}
               </h3>
-              <p className="text-xs text-[#9E9384] line-clamp-2 mt-1">
+              <p className="text-xs text-[#A39E9F] line-clamp-2 mt-1">
                 {pl.description}
               </p>
-              <span className="text-xs text-[#DFCCB0] mt-2 block font-medium tabular-nums">
+              <span className="text-xs text-[#FF443A] mt-2 block font-medium tabular-nums">
                 {pl.isCustom ? 'Custom · ' : pl.regionLabel ? `${pl.regionLabel} · ` : ''}
                 {pl.tracks.length} tracks
               </span>

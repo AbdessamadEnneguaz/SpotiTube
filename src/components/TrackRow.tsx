@@ -44,10 +44,10 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
     <div
       className={`group flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2.5 rounded-xl transition-colors text-sm border ${
         isOfflineDisabled
-          ? 'opacity-45 text-[#8F8476] border-transparent cursor-not-allowed'
+          ? 'opacity-45 text-[#6F6A6B] border-transparent cursor-not-allowed'
           : isCurrent
-            ? 'bg-[#D8C3A5]/[0.10] border-[#D8C3A5]/25 text-[#F5F0E8]'
-            : 'border-transparent text-[#9E9384] hover:bg-[#EAE0D0]/[0.05] hover:border-[#EAE0D0]/[0.08]'
+            ? 'bg-[#EF2323]/12 border-[#EF2323]/40 text-white'
+            : 'border-transparent text-[#A39E9F] hover:bg-white/[0.04] hover:border-white/[0.08]'
       }`}
     >
       {/* Index or Play Indicator */}
@@ -57,19 +57,19 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
             type="button"
             onClick={() => onPlay(track)}
             aria-label={`Pause ${track.title}`}
-            className="w-5 h-5 flex items-center justify-center text-[#D8C3A5] cursor-pointer"
+            className="w-5 h-5 flex items-center justify-center text-[#EF2323] cursor-pointer"
           >
             <div className="flex items-end gap-0.5 h-3.5">
-              <span className="w-0.5 bg-[#D8C3A5] animate-pulse h-3.5 rounded-full" />
-              <span className="w-0.5 bg-[#D8C3A5] animate-pulse h-2 delay-75 rounded-full" />
-              <span className="w-0.5 bg-[#D8C3A5] animate-pulse h-3 delay-150 rounded-full" />
+              <span className="w-0.5 bg-[#EF2323] h-3.5 rounded-sm" />
+              <span className="w-0.5 bg-[#FF443A] h-2 rounded-sm" />
+              <span className="w-0.5 bg-[#EF2323] h-3 rounded-sm" />
             </div>
           </button>
         ) : (
           <>
-            <span className={`${isOfflineDisabled ? '' : 'group-hover:hidden'} text-xs font-mono tabular-nums text-[#8F8476]`}>
+            <span className={`${isOfflineDisabled ? '' : 'group-hover:hidden'} text-xs font-mono tabular-nums text-[#6F6A6B]`}>
               {isCurrent ? (
-                <span className="text-[#D8C3A5] font-bold">▶</span>
+                <span className="text-[#EF2323] font-bold">▶</span>
               ) : (
                 String(index + 1).padStart(2, '0')
               )}
@@ -79,7 +79,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                 type="button"
                 onClick={() => onPlay(track)}
                 aria-label={`Play ${track.title} by ${track.artist}`}
-                className="hidden group-hover:flex items-center justify-center text-[#DFCCB0] hover:scale-110 transition-transform cursor-pointer"
+                className="hidden group-hover:flex items-center justify-center text-[#FF443A] hover:scale-110 transition-transform cursor-pointer"
               >
                 <Play className="w-4 h-4 fill-current" />
               </button>
@@ -97,7 +97,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
           onClick={() => {
             if (!isOfflineDisabled) onPlay(track);
           }}
-          className={`w-10 h-10 rounded-lg object-cover shrink-0 bg-[#24201B] ${
+          className={`w-10 h-10 rounded-lg object-cover shrink-0 bg-[#171213] ${
             isOfflineDisabled ? 'grayscale' : 'cursor-pointer'
           }`}
         />
@@ -111,15 +111,15 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
             }}
             className={`font-medium truncate ${
               isOfflineDisabled
-                ? 'text-[#9E9384]'
+                ? 'text-[#A39E9F]'
                 : isCurrent
-                  ? 'text-[#DFCCB0] font-semibold cursor-pointer hover:underline'
-                  : 'text-[#F5F0E8] cursor-pointer hover:underline'
+                  ? 'text-[#FF443A] font-semibold cursor-pointer hover:underline'
+                  : 'text-[#F4F1F1] cursor-pointer hover:underline'
             }`}
           >
             {track.title}
           </div>
-          <div className="text-xs text-[#9E9384] truncate flex items-center gap-1.5">
+          <div className="text-xs text-[#A39E9F] truncate flex items-center gap-1.5">
             <button
               type="button"
               onClick={() => {
@@ -128,22 +128,22 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                   else onPlay(track);
                 }
               }}
-              className="truncate hover:text-[#DFCCB0] transition-colors cursor-pointer text-left"
+              className="truncate hover:text-[#FF443A] transition-colors cursor-pointer text-left"
             >
               {track.artist}
             </button>
             {track.country && (
-              <span className="text-[#8F8476] shrink-0 hidden sm:inline">
+              <span className="text-[#6F6A6B] shrink-0 hidden sm:inline">
                 · {track.country}
               </span>
             )}
             {isCached && (
-              <span className="text-[11px] font-medium text-[#DFCCB0] shrink-0">
+              <span className="text-[11px] font-medium text-[#FF443A] shrink-0">
                 · Cached
               </span>
             )}
             {isOfflineDisabled && (
-              <span className="text-[11px] font-medium text-[#8F8476] shrink-0">
+              <span className="text-[11px] font-medium text-[#6F6A6B] shrink-0">
                 · Online only
               </span>
             )}
@@ -152,7 +152,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
       </div>
 
       {/* Album / Collection */}
-      <div className="hidden md:block w-1/4 truncate text-xs text-[#9E9384]">
+      <div className="hidden md:block w-1/4 truncate text-xs text-[#A39E9F]">
         {track.album || track.country || 'Single'}
       </div>
 
@@ -161,9 +161,9 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
         <button
           type="button"
           onClick={() => onToggleLike(track)}
-          aria-label={isLiked ? "Unlike" : "Like"}
+          aria-label={isLiked ? 'Unlike' : 'Like'}
           className={`hidden sm:inline-flex p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all cursor-pointer ${
-            isLiked ? 'text-[#D8C3A5] opacity-100' : 'text-[#9E9384] hover:text-[#F5F0E8]'
+            isLiked ? 'text-[#FF443A] opacity-100' : 'text-[#A39E9F] hover:text-white'
           }`}
         >
           <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
@@ -174,7 +174,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
           onClick={() => onAddToQueue(track)}
           title="Add to Queue"
           aria-label="Add to Queue"
-          className="hidden sm:inline-flex p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-[#9E9384] hover:text-[#F5F0E8] transition-all cursor-pointer"
+          className="hidden sm:inline-flex p-1.5 rounded-lg opacity-0 group-hover:opacity-100 text-[#A39E9F] hover:text-white transition-all cursor-pointer"
         >
           <Plus className="w-4 h-4" />
         </button>
@@ -184,13 +184,13 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
             type="button"
             onClick={() => setShowMenu(!showMenu)}
             aria-label="More options"
-            className="p-2 sm:p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-[#9E9384] hover:text-[#F5F0E8] transition-opacity cursor-pointer"
+            className="p-2 sm:p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-[#A39E9F] hover:text-white transition-opacity cursor-pointer"
           >
             <MoreHorizontal className="w-4 h-4" />
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 top-full mt-1 w-52 bg-[#221E1A] border border-[#EAE0D0]/14 rounded-xl shadow-2xl py-1.5 z-50 text-xs">
+            <div className="absolute right-0 top-full mt-1 w-52 bg-[#171213] border border-white/14 rounded-xl shadow-2xl py-1.5 z-50 text-xs">
               {onInspectTrack && (
                 <button
                   type="button"
@@ -198,7 +198,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                     onInspectTrack(track);
                     setShowMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-[#DFCCB0] hover:bg-[#EAE0D0]/[0.07] hover:text-[#F5F0E8] flex items-center gap-2 cursor-pointer font-medium"
+                  className="w-full text-left px-3.5 py-2 text-[#FF443A] hover:bg-white/[0.06] hover:text-white flex items-center gap-2 cursor-pointer font-medium"
                 >
                   <UserRound className="w-3.5 h-3.5" />
                   <span>About Artist &amp; Track</span>
@@ -210,7 +210,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                   onPlayNext(track);
                   setShowMenu(false);
                 }}
-                className="w-full text-left px-3.5 py-2 text-[#E4DDD2] hover:bg-[#EAE0D0]/[0.07] hover:text-[#F5F0E8] flex items-center gap-2 cursor-pointer"
+                className="w-full text-left px-3.5 py-2 text-[#D0CBCC] hover:bg-white/[0.06] hover:text-white flex items-center gap-2 cursor-pointer"
               >
                 <span>Play Next in Queue</span>
               </button>
@@ -220,7 +220,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                   onAddToQueue(track);
                   setShowMenu(false);
                 }}
-                className="w-full text-left px-3.5 py-2 text-[#E4DDD2] hover:bg-[#EAE0D0]/[0.07] hover:text-[#F5F0E8] flex items-center gap-2 cursor-pointer"
+                className="w-full text-left px-3.5 py-2 text-[#D0CBCC] hover:bg-white/[0.06] hover:text-white flex items-center gap-2 cursor-pointer"
               >
                 <span>Add to Queue</span>
               </button>
@@ -230,7 +230,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                   onToggleLike(track);
                   setShowMenu(false);
                 }}
-                className="w-full text-left px-3.5 py-2 text-[#E4DDD2] hover:bg-[#EAE0D0]/[0.07] hover:text-[#F5F0E8] flex items-center gap-2 cursor-pointer"
+                className="w-full text-left px-3.5 py-2 text-[#D0CBCC] hover:bg-white/[0.06] hover:text-white flex items-center gap-2 cursor-pointer"
               >
                 <span>{isLiked ? 'Remove from Favorites' : 'Save to Favorites'}</span>
               </button>
@@ -241,7 +241,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                     onCacheTrack(track);
                     setShowMenu(false);
                   }}
-                  className="w-full text-left px-3.5 py-2 text-[#DFCCB0] hover:bg-[#EAE0D0]/[0.07] hover:text-[#F5F0E8] flex items-center gap-2 cursor-pointer"
+                  className="w-full text-left px-3.5 py-2 text-[#FF443A] hover:bg-white/[0.06] hover:text-white flex items-center gap-2 cursor-pointer"
                 >
                   <Check className="w-3.5 h-3.5" />
                   <span>{isCached ? 'Cached for Offline' : 'Cache for Offline'}</span>
@@ -249,8 +249,8 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
               )}
 
               {customPlaylists.length > 0 && onAddToPlaylist && (
-                <div className="border-t border-[#EAE0D0]/[0.08] mt-1 pt-1">
-                  <div className="px-3.5 py-1 text-[10px] text-[#9E9384] font-semibold">
+                <div className="border-t border-white/[0.08] mt-1 pt-1">
+                  <div className="px-3.5 py-1 text-[10px] text-[#A39E9F] font-semibold">
                     Add to Playlist
                   </div>
                   {customPlaylists.map(pl => (
@@ -261,9 +261,9 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                         onAddToPlaylist(pl.id, track);
                         setShowMenu(false);
                       }}
-                      className="w-full text-left px-3.5 py-1.5 text-[#C8BEB0] hover:bg-[#EAE0D0]/[0.07] hover:text-[#F5F0E8] truncate cursor-pointer flex items-center gap-1.5"
+                      className="w-full text-left px-3.5 py-1.5 text-[#D0CBCC] hover:bg-white/[0.06] hover:text-white truncate cursor-pointer flex items-center gap-1.5"
                     >
-                      <FolderPlus className="w-3.5 h-3.5 text-[#D8C3A5] shrink-0" />
+                      <FolderPlus className="w-3.5 h-3.5 text-[#EF2323] shrink-0" />
                       <span className="truncate">{pl.name}</span>
                     </button>
                   ))}
@@ -275,7 +275,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
       </div>
 
       {/* Duration */}
-      <div className="w-12 text-right text-xs font-mono tabular-nums text-[#9E9384] shrink-0">
+      <div className="w-12 text-right text-xs font-mono tabular-nums text-[#A39E9F] shrink-0">
         {track.durationFormatted}
       </div>
     </div>

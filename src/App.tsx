@@ -92,9 +92,9 @@ const BackgroundPermissionModal = lazy(() =>
 );
 
 const PageLoader: React.FC = () => (
-  <div className="flex items-center justify-center py-20 text-[#9E9384] gap-3">
-    <div className="w-5 h-5 border-2 border-[#D8C3A5] border-t-transparent rounded-full animate-spin" />
-    <span className="text-xs font-medium text-[#C8BEB0]">Loading page...</span>
+  <div className="flex items-center justify-center py-20 text-[#A39E9F] gap-3">
+    <div className="w-5 h-5 border-2 border-[#EF2323] border-t-transparent rounded-full animate-spin" />
+    <span className="text-xs font-medium text-[#D0CBCC]">Loading page...</span>
   </div>
 );
 
@@ -858,7 +858,7 @@ export default function App() {
   const featuredHomeTracks = useMemo(() => CURATED_TRACKS.slice(0, 4), []);
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#12100E] text-[#F5F0E8] font-sans antialiased">
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#070607] text-[#F4F1F1] font-sans antialiased">
       {/* Application Workspace */}
       <div className="flex flex-1 overflow-hidden">
         {/* Minimal Left Navigation Rail */}
@@ -877,7 +877,7 @@ export default function App() {
         />
 
         {/* Central Content Viewport */}
-        <div className="flex-1 flex flex-col bg-[#12100E] overflow-hidden relative">
+        <div className="flex-1 flex flex-col bg-[#070607] overflow-hidden relative">
           <Header
             currentView={currentView}
             canGoBack={canGoBack}
@@ -1206,7 +1206,7 @@ export default function App() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-40 md:bottom-28 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-[#1B1815]/95 border border-[#D8C3A5]/40 px-4 py-2 text-xs font-semibold text-[#EDE0CC] shadow-2xl whitespace-nowrap max-w-[92vw] truncate"
+          className="fixed bottom-40 md:bottom-28 left-1/2 -translate-x-1/2 z-50 rounded-xl bg-[#110E0F]/95 border border-[#EF2323]/45 px-4 py-2 text-xs font-semibold text-white shadow-2xl whitespace-nowrap max-w-[92vw] truncate"
         >
           {offlineNotice}
         </div>

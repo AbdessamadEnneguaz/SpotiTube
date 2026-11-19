@@ -33,19 +33,19 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
     currentView === 'recent';
 
   return (
-    <aside className="hidden md:flex w-60 bg-[#161310] border-r border-[#EAE0D0]/[0.08] flex-col h-full shrink-0 text-[#9E9384] text-sm">
+    <aside className="hidden md:flex w-60 bg-[#0B0A0B] border-r border-white/[0.08] flex-col h-full shrink-0 text-[#A39E9F] text-sm">
       {/* Brand Header */}
-      <div className="px-5 pt-5 pb-4 border-b border-[#EAE0D0]/[0.07]">
+      <div className="px-5 pt-5 pb-4 border-b border-white/[0.07]">
         <button
           type="button"
           onClick={() => onNavigate('home')}
           className="flex items-center gap-3 text-left group cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-[#D8C3A5] text-[#12100E] flex items-center justify-center shadow-[0_6px_18px_rgba(216,195,165,0.18)] shrink-0">
+          <div className="w-9 h-9 rounded-xl bg-[#EF2323] text-white flex items-center justify-center shadow-[0_6px_20px_rgba(239,35,35,0.35)] shrink-0">
             <Disc3 className="w-5 h-5" />
           </div>
-          <span className="font-display font-bold text-lg tracking-tight text-[#F5F0E8] whitespace-nowrap shrink-0">
-            SpotiTube
+          <span className="font-display font-extrabold text-xl tracking-tight text-white whitespace-nowrap shrink-0">
+            Kidd<span className="text-[#EF2323]">wave</span>
           </span>
         </button>
       </div>
@@ -58,11 +58,11 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
             onClick={() => onNavigate('home')}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer whitespace-nowrap ${
               isHomeSection && !selectedPlaylistId
-                ? 'bg-[#D8C3A5]/14 text-[#EDE0CC] border border-[#D8C3A5]/25 font-semibold'
-                : 'text-[#C8BEB0] hover:text-[#F5F0E8] hover:bg-[#EAE0D0]/[0.05] border border-transparent'
+                ? 'bg-[#EF2323]/14 text-white border border-[#EF2323]/40 font-semibold'
+                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border border-transparent'
             }`}
           >
-            <Home className="w-4 h-4 shrink-0" />
+            <Home className={`w-4 h-4 shrink-0 ${isHomeSection && !selectedPlaylistId ? 'text-[#FF443A]' : ''}`} />
             <span>Home</span>
           </button>
 
@@ -71,11 +71,11 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
             onClick={() => onNavigate('search')}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer whitespace-nowrap ${
               currentView === 'search'
-                ? 'bg-[#D8C3A5]/14 text-[#EDE0CC] border border-[#D8C3A5]/25 font-semibold'
-                : 'text-[#C8BEB0] hover:text-[#F5F0E8] hover:bg-[#EAE0D0]/[0.05] border border-transparent'
+                ? 'bg-[#EF2323]/14 text-white border border-[#EF2323]/40 font-semibold'
+                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border border-transparent'
             }`}
           >
-            <Search className="w-4 h-4 shrink-0" />
+            <Search className={`w-4 h-4 shrink-0 ${currentView === 'search' ? 'text-[#FF443A]' : ''}`} />
             <span>Search</span>
           </button>
 
@@ -84,22 +84,22 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
             onClick={() => onNavigate('library')}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer whitespace-nowrap ${
               currentView === 'library'
-                ? 'bg-[#D8C3A5]/14 text-[#EDE0CC] border border-[#D8C3A5]/25 font-semibold'
-                : 'text-[#C8BEB0] hover:text-[#F5F0E8] hover:bg-[#EAE0D0]/[0.05] border border-transparent'
+                ? 'bg-[#EF2323]/14 text-white border border-[#EF2323]/40 font-semibold'
+                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border border-transparent'
             }`}
           >
-            <Library className="w-4 h-4 shrink-0" />
+            <Library className={`w-4 h-4 shrink-0 ${currentView === 'library' ? 'text-[#FF443A]' : ''}`} />
             <span>Library</span>
           </button>
         </nav>
       </div>
 
-      <div className="h-px bg-[#EAE0D0]/[0.07] mx-4" />
+      <div className="h-px bg-white/[0.07] mx-4" />
 
       {/* Compact Personal Vault & Custom Mixes */}
       <div className="flex-1 flex flex-col overflow-hidden px-3 pt-4 pb-2">
         <div className="flex items-center justify-between px-2.5 pb-2.5">
-          <span className="text-xs font-semibold text-[#9E9384]">
+          <span className="text-xs font-semibold text-[#A39E9F]">
             Your Collection
           </span>
           <button
@@ -107,35 +107,35 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
             onClick={onOpenCreatePlaylist}
             title="New Playlist"
             aria-label="Create Playlist"
-            className="w-7 h-7 rounded-lg bg-[#EAE0D0]/[0.06] hover:bg-[#D8C3A5] hover:text-[#12100E] text-[#C8BEB0] flex items-center justify-center transition-colors cursor-pointer"
+            className="w-7 h-7 rounded-lg bg-white/[0.06] hover:bg-[#EF2323] hover:text-white text-[#D0CBCC] flex items-center justify-center transition-colors cursor-pointer"
           >
             <Plus className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-[#2E2923]">
+        <div className="flex-1 overflow-y-auto space-y-1 pr-1 scrollbar-thin scrollbar-thumb-[#272022]">
           <button
             type="button"
             onClick={() => onSelectPlaylist('liked')}
             className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl transition-colors text-left cursor-pointer border ${
               selectedPlaylistId === 'liked'
-                ? 'bg-[#D8C3A5]/14 text-[#F5F0E8] border-[#D8C3A5]/28'
-                : 'border-transparent hover:bg-[#EAE0D0]/[0.05] text-[#C8BEB0]'
+                ? 'bg-[#EF2323]/14 text-white border-[#EF2323]/40'
+                : 'border-transparent hover:bg-white/[0.05] text-[#D0CBCC]'
             }`}
           >
-            <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-[#24201B]">
+            <div className="relative w-9 h-9 rounded-lg overflow-hidden shrink-0 bg-[#171213]">
               <CoverImage
                 src={DEFAULT_FAVORITES_COVER}
                 alt="Saved Favorites"
                 className="w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-black/35 flex items-center justify-center">
-                <Heart className="w-3.5 h-3.5 text-[#DFCCB0] fill-current" />
+              <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
+                <Heart className="w-3.5 h-3.5 text-[#FF443A] fill-current" />
               </div>
             </div>
             <div className="truncate flex-1">
-              <div className="text-[13px] font-semibold truncate text-[#F5F0E8]">Saved Favorites</div>
-              <div className="text-[11px] text-[#9E9384] tabular-nums truncate">
+              <div className="text-[13px] font-semibold truncate text-[#F4F1F1]">Saved Favorites</div>
+              <div className="text-[11px] text-[#A39E9F] tabular-nums truncate">
                 {likedCount} {likedCount === 1 ? 'track' : 'tracks'}
               </div>
             </div>
@@ -150,21 +150,21 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
                 onClick={() => onSelectPlaylist(playlist.id)}
                 className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-xl transition-colors text-left cursor-pointer border group ${
                   isSelected
-                    ? 'bg-[#D8C3A5]/14 text-[#F5F0E8] border-[#D8C3A5]/28'
-                    : 'border-transparent hover:bg-[#EAE0D0]/[0.05] text-[#9E9384] hover:text-[#F5F0E8]'
+                    ? 'bg-[#EF2323]/14 text-white border-[#EF2323]/40'
+                    : 'border-transparent hover:bg-white/[0.05] text-[#A39E9F] hover:text-white'
                 }`}
               >
                 <CoverImage
                   src={playlist.coverImage}
                   alt={playlist.name}
                   youtubeId={playlist.tracks[0]?.youtubeId}
-                  className="w-9 h-9 rounded-lg object-cover shrink-0 bg-[#24201B]"
+                  className="w-9 h-9 rounded-lg object-cover shrink-0 bg-[#171213]"
                 />
                 <div className="truncate flex-1">
-                  <div className="text-[13px] truncate font-medium text-[#E4DDD2] group-hover:text-[#F5F0E8]">
+                  <div className="text-[13px] truncate font-medium text-[#E5E0E1] group-hover:text-white">
                     {playlist.name}
                   </div>
-                  <div className="text-[11px] text-[#8F8476] truncate tabular-nums">
+                  <div className="text-[11px] text-[#6F6A6B] truncate tabular-nums">
                     Custom · {playlist.tracks.length} tracks
                   </div>
                 </div>
@@ -175,7 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           <button
             type="button"
             onClick={() => onNavigate('mixes')}
-            className="w-full flex items-center justify-between px-3 py-2.5 mt-2 rounded-xl text-xs font-semibold text-[#DFCCB0] hover:bg-[#EAE0D0]/[0.05] transition-colors cursor-pointer"
+            className="w-full flex items-center justify-between px-3 py-2.5 mt-2 rounded-xl text-xs font-semibold text-[#FF443A] hover:bg-[#EF2323]/10 transition-colors cursor-pointer"
           >
             <span>Browse World Mixes</span>
             <ChevronRight className="w-3.5 h-3.5" />
@@ -183,20 +183,20 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
         </div>
 
         {/* Quiet Legal Footer */}
-        <div className="pt-3 mt-2 border-t border-[#EAE0D0]/[0.07] px-2 flex items-center flex-wrap gap-x-2 gap-y-1 text-[11px] text-[#8F8476]">
-          <button type="button" onClick={() => onOpenLegal('privacy')} className="hover:text-[#F5F0E8] transition-colors cursor-pointer">
+        <div className="pt-3 mt-2 border-t border-white/[0.07] px-2 flex items-center flex-wrap gap-x-2 gap-y-1 text-[11px] text-[#6F6A6B]">
+          <button type="button" onClick={() => onOpenLegal('privacy')} className="hover:text-white transition-colors cursor-pointer">
             Privacy
           </button>
           <span aria-hidden="true">·</span>
-          <button type="button" onClick={() => onOpenLegal('terms')} className="hover:text-[#F5F0E8] transition-colors cursor-pointer">
+          <button type="button" onClick={() => onOpenLegal('terms')} className="hover:text-white transition-colors cursor-pointer">
             Terms
           </button>
           <span aria-hidden="true">·</span>
-          <button type="button" onClick={() => onOpenLegal('dmca')} className="hover:text-[#F5F0E8] transition-colors cursor-pointer">
+          <button type="button" onClick={() => onOpenLegal('dmca')} className="hover:text-white transition-colors cursor-pointer">
             DMCA
           </button>
           <span aria-hidden="true">·</span>
-          <button type="button" onClick={() => onOpenLegal('cookies')} className="hover:text-[#F5F0E8] transition-colors cursor-pointer">
+          <button type="button" onClick={() => onOpenLegal('cookies')} className="hover:text-white transition-colors cursor-pointer">
             Cookies
           </button>
         </div>

@@ -59,11 +59,11 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-xl sm:text-2xl font-bold text-[#F5F0E8] break-words">
+        <h1 className="font-display text-xl sm:text-2xl font-extrabold text-white break-words">
           {searchQuery ? `Results for "${searchQuery}"` : 'Search Music Worldwide'}
         </h1>
         {searchStatusMsg && searchQuery && (
-          <p className="text-xs text-[#DFCCB0] mt-1 font-mono tabular-nums">
+          <p className="text-xs text-[#FF443A] mt-1 font-mono tabular-nums">
             {searchStatusMsg}
           </p>
         )}
@@ -74,15 +74,15 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           {isOfflineMode && (
             <section className="space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="font-display text-lg font-bold text-[#F5F0E8]">
+                <h2 className="font-display text-lg font-bold text-white">
                   Cached Tracks (Offline)
                 </h2>
-                <span className="text-xs font-mono tabular-nums text-[#DFCCB0]">
+                <span className="text-xs font-mono tabular-nums text-[#FF443A]">
                   {cachedTracksList.length} saved
                 </span>
               </div>
               {cachedTracksList.length === 0 ? (
-                <div className="rounded-xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 text-sm text-[#C8BEB0]">
+                <div className="rounded-xl bg-[#110E0F] border border-white/[0.08] p-5 text-sm text-[#D0CBCC]">
                   No cached tracks yet. Play any track while online to save it automatically.
                 </div>
               ) : (
@@ -123,10 +123,10 @@ export const SearchPage: React.FC<SearchPageProps> = ({
 
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg sm:text-xl font-bold text-[#F5F0E8]">
+              <h2 className="font-display text-lg sm:text-xl font-bold text-white">
                 Quick Country Picks
               </h2>
-              <span className="text-xs text-[#9E9384]">Tap any country to search</span>
+              <span className="text-xs text-[#A39E9F]">Tap any country to search</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
               {WORLD_COUNTRY_PRESETS.slice(0, 5).map((country) => (
@@ -134,15 +134,15 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                   type="button"
                   key={country.id}
                   onClick={() => onSelectSearch(country.query)}
-                  className="card-interactive text-left p-3.5 rounded-xl bg-[#1B1815] hover:bg-[#24201B] border border-[#EAE0D0]/[0.08] hover:border-[#D8C3A5]/45 cursor-pointer flex flex-col justify-between min-h-[78px]"
+                  className="card-interactive text-left p-3.5 rounded-xl bg-[#110E0F] hover:bg-[#171213] border border-white/[0.08] hover:border-[#EF2323]/45 cursor-pointer flex flex-col justify-between min-h-[78px]"
                 >
                   <div className="flex items-center justify-between gap-2 w-full">
-                    <span className="font-display font-bold text-sm text-[#F5F0E8] truncate">
+                    <span className="font-display font-bold text-sm text-white truncate">
                       {country.name}
                     </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#DFCCB0] shrink-0" />
+                    <ArrowRight className="w-3.5 h-3.5 text-[#FF443A] shrink-0" />
                   </div>
-                  <span className="text-[11px] text-[#9E9384] truncate mt-2">
+                  <span className="text-[11px] text-[#A39E9F] truncate mt-2">
                     {country.styleHint}
                   </span>
                 </button>
@@ -153,8 +153,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
       ) : (
         <div className="space-y-4">
           {recentSearches.length > 0 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs text-[#9E9384]">
-              <span className="font-semibold text-[#8F8476] text-[11px] shrink-0">Recent:</span>
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs text-[#A39E9F]">
+              <span className="font-semibold text-[#6F6A6B] text-[11px] shrink-0">Recent:</span>
               {recentSearches.map((term) => (
                 <button
                   type="button"
@@ -162,8 +162,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                   onClick={() => onSelectSearch(term)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 transition-colors cursor-pointer border ${
                     searchQuery.toLowerCase() === term.toLowerCase()
-                      ? 'bg-[#D8C3A5] text-[#12100E] border-[#D8C3A5] font-bold'
-                      : 'bg-[#1B1815] text-[#C8BEB0] border-[#EAE0D0]/10 hover:bg-[#24201B] hover:text-[#F5F0E8]'
+                      ? 'bg-[#EF2323] text-white border-[#EF2323] font-bold'
+                      : 'bg-[#110E0F] text-[#D0CBCC] border-white/10 hover:bg-[#171213] hover:text-white'
                   }`}
                 >
                   {term}
@@ -173,13 +173,13 @@ export const SearchPage: React.FC<SearchPageProps> = ({
           )}
 
           {isSearching ? (
-            <div className="flex items-center justify-center py-16 text-[#9E9384] gap-3">
-              <div className="w-5 h-5 border-2 border-[#D8C3A5] border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center justify-center py-16 text-[#A39E9F] gap-3">
+              <div className="w-5 h-5 border-2 border-[#EF2323] border-t-transparent rounded-full animate-spin" />
               <span className="text-sm">Searching global music catalog...</span>
             </div>
           ) : searchResults.length === 0 ? (
-            <div className="text-center py-16 text-[#9E9384] space-y-2">
-              <p className="text-lg font-bold text-[#F5F0E8]">No results found for &ldquo;{searchQuery}&rdquo;</p>
+            <div className="text-center py-16 text-[#A39E9F] space-y-2">
+              <p className="text-lg font-bold text-white">No results found for &ldquo;{searchQuery}&rdquo;</p>
               <p className="text-sm">
                 {isOfflineMode
                   ? 'You are offline. Only cached tracks are searchable until your connection returns.'
@@ -188,7 +188,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
             </div>
           ) : (
             <div className="space-y-1">
-              <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#9E9384] border-b border-[#EAE0D0]/[0.07]">
+              <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#A39E9F] border-b border-white/[0.08]">
                 <span className="w-6 text-center shrink-0">#</span>
                 <span className="flex-1 min-w-0">Title</span>
                 <span className="hidden md:block w-1/4">Release</span>

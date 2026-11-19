@@ -37,9 +37,9 @@ export function buildMediaMetadataInit(track: Track): MediaMetadataSpec {
   }
 
   return {
-    title: track.title || 'SpotiTube Track',
-    artist: track.artist || 'SpotiTube',
-    album: track.album || 'SpotiTube Music',
+    title: track.title || 'Kiddwave Track',
+    artist: track.artist || 'Kiddwave',
+    album: track.album || 'Kiddwave Music',
     artwork
   };
 }

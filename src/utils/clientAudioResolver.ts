@@ -9,7 +9,9 @@ export interface ResolvedAudioCandidate {
 export type CanPlayAudioFn = (mimeType: string) => boolean;
 
 const MIRROR_CACHE_TTL_MS = 10 * 60 * 1000;
+const NEGATIVE_CACHE_TTL_MS = 60 * 1000;
 const mirrorAudioCache = new Map<string, { candidate: ResolvedAudioCandidate; expiresAt: number }>();
+const failedMirrorCache = new Map<string, number>();
 const inFlightMirrorLookups = new Map<string, Promise<ResolvedAudioCandidate | null>>();
 
 // Verified CORS-enabled Piped endpoint (avoids dead DNS/SSL/CORS console errors)
@@ -125,7 +127,7 @@ async function queryPipedMirror(
   try {
     const res = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
       headers: { Accept: 'application/json' },
-      signal: AbortSignal.timeout(2600)
+      signal: AbortSignal.timeout(1500)
     });
     if (!res.ok) return null;
     const contentType = res.headers.get('content-type') || '';
@@ -139,6 +141,7 @@ async function queryPipedMirror(
 
 export function clearClientMirrorCache(): void {
   mirrorAudioCache.clear();
+  failedMirrorCache.clear();
   inFlightMirrorLookups.clear();
 }
 
@@ -158,6 +161,10 @@ export async function resolveClientMirrorAudio(
   if (cached && now < cached.expiresAt) {
     return cached.candidate;
   }
+  const failedUntil = failedMirrorCache.get(videoId);
+  if (failedUntil && now < failedUntil) {
+    return null;
+  }
 
   const existing = inFlightMirrorLookups.get(videoId);
   if (existing) return existing;
@@ -173,6 +180,7 @@ export async function resolveClientMirrorAudio(
         return winner;
       }
     }
+    failedMirrorCache.set(videoId, Date.now() + NEGATIVE_CACHE_TTL_MS);
     return null;
   })().finally(() => {
     inFlightMirrorLookups.delete(videoId);

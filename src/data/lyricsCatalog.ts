@@ -208,13 +208,13 @@ export function getLyricsForTrack(trackId: string, title: string, artist: string
 
   return [
     { time: 0, text: `♪ [Playing: "${title}" by ${artist}] ♪` },
-    { time: 10, text: "SpotiTube Live Synchronized Karaoke Captions" },
-    { time: interval, text: `Listening to ${title} • Official SpotiTube Premium` },
+    { time: 10, text: "Kiddwave Live Synchronized Karaoke Captions" },
+    { time: interval, text: `Listening to ${title} · Official Kiddwave Soundstage` },
     { time: interval * 2, text: "♪ [Instrumental Melody & Rhythm] ♪" },
     { time: interval * 3, text: `Vocals & Flow by ${artist}` },
     { time: interval * 4, text: "Feel the authentic rhythm & bass" },
     { time: interval * 5, text: "♪ [Hook & Chorus section] ♪" },
-    { time: interval * 6, text: `"${title}" — SpotiTube Synchronized Captions` },
+    { time: interval * 6, text: `"${title}" — Kiddwave Synchronized Captions` },
     { time: interval * 7, text: "♪ [Beat Bridge & Solos] ♪" },
     { time: interval * 8, text: "Tap any lyric line to jump directly to that part!" },
     { time: interval * 9, text: "Enjoying the high-fidelity soundstage" },

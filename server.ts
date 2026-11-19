@@ -139,7 +139,7 @@ app.get('/api/artist', async (req: Request, res: Response) => {
     const wikiRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${slug}`, {
       headers: {
         Accept: 'application/json',
-        'User-Agent': 'SpotiTubeMusicDirectory/1.0'
+        'User-Agent': 'KiddwaveMusicDirectory/1.0'
       },
       signal: AbortSignal.timeout(2500)
     });
@@ -244,18 +244,24 @@ app.get('/api/audio', async (req: Request, res: Response) => {
 });
 
 // Android APK availability metadata & direct download MIME headers
-app.get('/api/apk-info', (_req: Request, res: Response) => {
-  const localPaths = [
+const findLocalApkPath = (): string | undefined => {
+  const candidates = [
+    path.resolve(__dirname, 'public', 'Kiddwave.apk'),
+    path.resolve(__dirname, 'dist', 'Kiddwave.apk'),
     path.resolve(__dirname, 'public', 'SpotiTube.apk'),
     path.resolve(__dirname, 'dist', 'SpotiTube.apk')
   ];
-  const localExists = localPaths.some((p) => {
+  return candidates.find((p) => {
     try {
       return fs.existsSync(p) && fs.statSync(p).size > 1024;
     } catch {
       return false;
     }
   });
+};
+
+app.get('/api/apk-info', (_req: Request, res: Response) => {
+  const localExists = Boolean(findLocalApkPath());
   const config = resolveApkDownloadConfig({
     configuredUrl: process.env.ANDROID_APK_URL || process.env.VITE_ANDROID_APK_URL,
     localApkExists: localExists
@@ -264,33 +270,26 @@ app.get('/api/apk-info', (_req: Request, res: Response) => {
   return res.json(config);
 });
 
-app.get('/SpotiTube.apk', (_req: Request, res: Response) => {
-  const candidates = [
-    path.resolve(__dirname, 'public', 'SpotiTube.apk'),
-    path.resolve(__dirname, 'dist', 'SpotiTube.apk')
-  ];
-  const found = candidates.find((p) => {
-    try {
-      return fs.existsSync(p) && fs.statSync(p).size > 1024;
-    } catch {
-      return false;
-    }
-  });
+const handleApkDownload = (_req: Request, res: Response) => {
+  const found = findLocalApkPath();
   if (!found) {
     return res.status(404).json({ error: 'APK binary not yet built or uploaded.' });
   }
   res.setHeader('Content-Type', 'application/vnd.android.package-archive');
-  res.setHeader('Content-Disposition', 'attachment; filename="SpotiTube.apk"');
+  res.setHeader('Content-Disposition', 'attachment; filename="Kiddwave.apk"');
   res.setHeader('Cache-Control', 'no-store, must-revalidate');
   return res.sendFile(found);
-});
+};
+
+app.get('/Kiddwave.apk', handleApkDownload);
+app.get('/SpotiTube.apk', handleApkDownload);
 
 // Health check endpoint for monitoring & uptime checks
 app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'SpotiTube Media Engine'
+    service: 'Kiddwave Media Engine'
   });
 });
 
@@ -315,7 +314,7 @@ async function startServer() {
   }
 
   httpServer.listen(PORT, '0.0.0.0', () => {
-    console.log(`SpotiTube full-stack server running on http://0.0.0.0:${PORT}`);
+    console.log(`Kiddwave full-stack server running on http://0.0.0.0:${PORT}`);
   });
 }
 

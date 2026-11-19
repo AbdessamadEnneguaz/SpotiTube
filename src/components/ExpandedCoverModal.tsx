@@ -165,35 +165,35 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-label={`Track and artist details for ${track.title}`}
-      className="fixed inset-0 z-50 flex flex-col bg-[#12100E]/98 text-[#F5F0E8] overflow-hidden"
+      className="fixed inset-0 z-50 flex flex-col bg-[#070607]/98 text-[#F4F1F1] overflow-hidden"
     >
-      {/* Ambient backdrop */}
+      {/* Ambient Crimson & Artwork Backdrop */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <img
           src={imgSrc || track.thumbnail}
           alt=""
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover blur-3xl scale-125 opacity-20 sepia-[.25]"
+          className="w-full h-full object-cover blur-3xl scale-125 opacity-20 grayscale contrast-125"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#12100E]/85 via-[#12100E]/90 to-[#12100E]" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#230607]/80 via-[#070607]/92 to-[#070607]" />
       </div>
 
       {/* Sticky Top Header */}
-      <div className="px-4 sm:px-6 py-3.5 flex items-center justify-between border-b border-[#EAE0D0]/[0.08] shrink-0 bg-[#12100E]/75 backdrop-blur-xl">
+      <div className="px-4 sm:px-6 py-3.5 flex items-center justify-between border-b border-white/[0.08] shrink-0 bg-[#070607]/80 backdrop-blur-xl">
         <button
           type="button"
           onClick={onClose}
           aria-label="Close track view"
-          className="w-10 h-10 rounded-xl bg-[#EAE0D0]/[0.06] hover:bg-[#EAE0D0]/[0.12] text-[#C8BEB0] hover:text-[#F5F0E8] flex items-center justify-center transition-colors cursor-pointer"
+          className="w-10 h-10 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-[#D0CBCC] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
         >
           <ChevronDown className="w-5 h-5" />
         </button>
 
         <div className="flex flex-col items-center min-w-0 px-3">
-          <span className="text-[11px] font-medium text-[#DFCCB0] truncate">
+          <span className="text-[11px] font-semibold text-[#FF443A] truncate">
             Now Playing{track.country ? ` · ${track.country}` : ''}
           </span>
-          <span className="text-xs font-semibold text-[#F5F0E8] truncate max-w-[220px] sm:max-w-md">
+          <span className="text-xs font-semibold text-white truncate max-w-[220px] sm:max-w-md">
             {track.album && track.album !== 'Studio Single' ? track.album : artistProfile.name}
           </span>
         </div>
@@ -202,7 +202,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="w-10 h-10 rounded-xl bg-[#EAE0D0]/[0.06] hover:bg-[#EAE0D0]/[0.12] text-[#C8BEB0] hover:text-[#F5F0E8] flex items-center justify-center transition-colors cursor-pointer"
+          className="w-10 h-10 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-[#D0CBCC] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
         >
           <X className="w-5 h-5" />
         </button>
@@ -213,7 +213,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
         <div className="max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-7 items-start">
           {/* LEFT: Artwork, Seekbar & Transport Controls */}
           <div className="lg:col-span-5 lg:sticky lg:top-2 flex flex-col items-center">
-            <div className="aspect-square w-full max-w-[290px] sm:max-w-[340px] lg:max-w-full rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.85)] border border-[#EAE0D0]/12 mb-5 bg-[#1B1815]">
+            <div className="aspect-square w-full max-w-[290px] sm:max-w-[340px] lg:max-w-full rounded-2xl overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.9)] border border-white/12 mb-5 bg-[#110E0F]">
               <img
                 src={imgSrc || track.thumbnail}
                 referrerPolicy="no-referrer"
@@ -229,10 +229,10 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
 
             <div className="w-full flex items-center justify-between gap-3 mb-4">
               <div className="min-w-0 flex-1">
-                <h1 className="font-display text-xl sm:text-2xl font-bold text-[#F5F0E8] tracking-tight truncate">
+                <h1 className="font-display text-xl sm:text-2xl font-extrabold text-white tracking-tight truncate">
                   {track.title}
                 </h1>
-                <p className="text-sm text-[#C8BEB0] font-medium truncate mt-0.5">
+                <p className="text-sm text-[#D0CBCC] font-medium truncate mt-0.5">
                   {track.artist}
                 </p>
               </div>
@@ -243,8 +243,8 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 aria-label={isLiked ? 'Unlike track' : 'Like track'}
                 className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 ${
                   isLiked
-                    ? 'text-[#DFCCB0] bg-[#D8C3A5]/15 border border-[#D8C3A5]/30'
-                    : 'text-[#C8BEB0] hover:text-[#F5F0E8] bg-[#EAE0D0]/[0.06] border border-[#EAE0D0]/12'
+                    ? 'text-[#FF443A] bg-[#EF2323]/15 border border-[#EF2323]/40'
+                    : 'text-[#D0CBCC] hover:text-white bg-white/[0.06] border border-white/12'
                 }`}
               >
                 <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
@@ -254,9 +254,9 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
             {/* Seekbar */}
             <div className="w-full space-y-1.5 mb-5">
               <div className="relative w-full group flex items-center">
-                <div className="w-full h-1.5 bg-[#EAE0D0]/15 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-[#D8C3A5] rounded-full transition-colors"
+                    className="h-full bg-[#EF2323] rounded-full transition-colors"
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
@@ -287,20 +287,20 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                   className="absolute inset-0 w-full opacity-0 cursor-pointer"
                 />
               </div>
-              <div className="flex justify-between text-xs font-mono tabular-nums text-[#9E9384]">
+              <div className="flex justify-between text-xs font-mono tabular-nums text-[#A39E9F]">
                 <span>{formatDuration(displayTime)}</span>
                 <span>{formatDuration(effectiveDuration)}</span>
               </div>
             </div>
 
             {/* Transport Controls */}
-            <div className="w-full flex items-center justify-between px-1 py-2 rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08]">
+            <div className="w-full flex items-center justify-between px-1.5 py-2 rounded-2xl bg-[#110E0F] border border-white/[0.08]">
               <button
                 type="button"
                 onClick={onToggleShuffle}
                 aria-label="Toggle shuffle"
                 className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
-                  isShuffle ? 'text-[#DFCCB0] bg-[#D8C3A5]/12' : 'text-[#9E9384] hover:text-[#F5F0E8]'
+                  isShuffle ? 'text-[#FF443A] bg-[#EF2323]/14' : 'text-[#A39E9F] hover:text-white'
                 }`}
               >
                 <Shuffle className="w-4 h-4" />
@@ -310,7 +310,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 type="button"
                 onClick={onPrevious}
                 aria-label="Previous track"
-                className="text-[#C8BEB0] hover:text-[#F5F0E8] transition-colors cursor-pointer p-2.5"
+                className="text-[#D0CBCC] hover:text-white transition-colors cursor-pointer p-2.5"
               >
                 <SkipBack className="w-6 h-6 fill-current" />
               </button>
@@ -319,7 +319,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 type="button"
                 onClick={onPlayPause}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="w-14 h-14 rounded-2xl bg-[#D8C3A5] hover:bg-[#E4D3BA] text-[#12100E] flex items-center justify-center active:scale-95 transition-transform shadow-lg cursor-pointer"
+                className="w-14 h-14 rounded-2xl bg-[#EF2323] hover:bg-[#FF3830] text-white flex items-center justify-center active:scale-95 transition-transform shadow-[0_8px_24px_rgba(239,35,35,0.4)] cursor-pointer"
               >
                 {isPlaying ? (
                   <Pause className="w-6 h-6 fill-current" />
@@ -332,7 +332,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 type="button"
                 onClick={onNext}
                 aria-label="Next track"
-                className="text-[#C8BEB0] hover:text-[#F5F0E8] transition-colors cursor-pointer p-2.5"
+                className="text-[#D0CBCC] hover:text-white transition-colors cursor-pointer p-2.5"
               >
                 <SkipForward className="w-6 h-6 fill-current" />
               </button>
@@ -342,7 +342,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 onClick={onToggleRepeat}
                 aria-label={`Toggle repeat (currently ${repeatMode})`}
                 className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
-                  repeatMode !== 'off' ? 'text-[#DFCCB0] bg-[#D8C3A5]/12' : 'text-[#9E9384] hover:text-[#F5F0E8]'
+                  repeatMode !== 'off' ? 'text-[#FF443A] bg-[#EF2323]/14' : 'text-[#A39E9F] hover:text-white'
                 }`}
               >
                 {repeatMode === 'one' ? (
@@ -357,7 +357,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
           {/* RIGHT: Editorial Artist & Track Inspector */}
           <div className="lg:col-span-7 space-y-5">
             {/* About the Artist Card */}
-            <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] overflow-hidden">
+            <section className="rounded-2xl bg-[#110E0F] border border-white/[0.08] overflow-hidden">
               <div className="p-5 sm:p-6 space-y-4">
                 <div className="space-y-2.5">
                   <div className="flex items-center justify-between gap-3">
@@ -368,16 +368,16 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                           alt={artistProfile.name}
                           referrerPolicy="no-referrer"
                           onError={() => setAvatarFailed(true)}
-                          className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl object-cover shrink-0 bg-[#24201B] border border-[#EAE0D0]/12"
+                          className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl object-cover shrink-0 bg-[#171213] border border-white/12"
                         />
                       ) : (
-                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl bg-[#D8C3A5]/12 border border-[#D8C3A5]/25 flex items-center justify-center shrink-0 text-[#DFCCB0]">
+                        <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-xl bg-[#EF2323]/14 border border-[#EF2323]/30 flex items-center justify-center shrink-0 text-[#FF443A]">
                           <UserRound className="w-6 h-6 sm:w-7 sm:h-7" />
                         </div>
                       )}
                       <div className="min-w-0">
-                        <div className="text-xs font-semibold text-[#DFCCB0]">About the Artist</div>
-                        <h2 className="font-display text-lg sm:text-2xl font-bold text-[#F5F0E8] truncate">
+                        <div className="text-xs font-semibold text-[#FF443A]">About the Artist</div>
+                        <h2 className="font-display text-lg sm:text-2xl font-extrabold text-white truncate">
                           {artistProfile.name}
                         </h2>
                       </div>
@@ -389,16 +389,16 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                         onSearchArtist(artistProfile.name);
                         onClose();
                       }}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#EAE0D0]/[0.06] hover:bg-[#D8C3A5] hover:text-[#12100E] text-[#E4DDD2] text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white/[0.06] hover:bg-[#EF2323] hover:text-white text-[#F4F1F1] text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
                     >
                       <Search className="w-3.5 h-3.5" />
                       <span>All Tracks</span>
                     </button>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-[#9E9384]">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-[#A39E9F]">
                     <span className="inline-flex items-center gap-1 whitespace-nowrap">
-                      <MapPin className="w-3.5 h-3.5 text-[#DFCCB0] shrink-0" />
+                      <MapPin className="w-3.5 h-3.5 text-[#FF443A] shrink-0" />
                       <span>{artistProfile.origin}</span>
                     </span>
                     <span className="hidden sm:inline" aria-hidden="true">·</span>
@@ -407,24 +407,24 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 </div>
 
                 {isLoadingArtist ? (
-                  <p className="text-xs sm:text-sm text-[#9E9384] animate-pulse">
+                  <p className="text-xs sm:text-sm text-[#A39E9F]">
                     Loading artist biography...
                   </p>
                 ) : (
-                  <p className="text-xs sm:text-sm text-[#E4DDD2] leading-relaxed">
+                  <p className="text-xs sm:text-sm text-[#D0CBCC] leading-relaxed">
                     {artistProfile.bio}
                   </p>
                 )}
 
-                <div className="pt-3 border-t border-[#EAE0D0]/[0.07] space-y-2">
-                  <div className="text-xs font-semibold text-[#C8BEB0] flex items-center gap-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-[#DFCCB0]" />
+                <div className="pt-3 border-t border-white/[0.08] space-y-2">
+                  <div className="text-xs font-semibold text-[#F4F1F1] flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#FF443A]" />
                     <span>Musical Identity &amp; What They Create</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-[#C8BEB0] leading-relaxed">
+                  <p className="text-xs sm:text-sm text-[#D0CBCC] leading-relaxed">
                     {artistProfile.craftSummary}
                   </p>
-                  <div className="text-xs text-[#9E9384] pt-1">
+                  <div className="text-xs text-[#A39E9F] pt-1">
                     {artistProfile.roles.join(' · ')} — {artistProfile.genres.join(' · ')}
                   </div>
                 </div>
@@ -433,18 +433,18 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
 
             {/* Discography / Notable Works & Track Credits */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#DFCCB0]">
+              <section className="rounded-2xl bg-[#110E0F] border border-white/[0.08] p-5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#FF443A]">
                   <Disc3 className="w-4 h-4" />
                   <span>Notable Releases &amp; Albums</span>
                 </div>
-                <ul className="space-y-2 text-xs sm:text-sm text-[#E4DDD2]">
+                <ul className="space-y-2 text-xs sm:text-sm text-[#F4F1F1]">
                   {artistProfile.notableWorks.map((work, idx) => (
                     <li
                       key={work}
-                      className="flex items-baseline gap-2.5 border-b border-[#EAE0D0]/[0.06] pb-1.5 last:border-b-0 last:pb-0"
+                      className="flex items-baseline gap-2.5 border-b border-white/[0.06] pb-1.5 last:border-b-0 last:pb-0"
                     >
-                      <span className="font-mono tabular-nums text-[11px] text-[#8F8476]">
+                      <span className="font-mono tabular-nums text-[11px] text-[#6F6A6B]">
                         {String(idx + 1).padStart(2, '0')}
                       </span>
                       <span className="font-medium truncate">{work}</span>
@@ -453,29 +453,29 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 </ul>
               </section>
 
-              <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-semibold text-[#DFCCB0]">
+              <section className="rounded-2xl bg-[#110E0F] border border-white/[0.08] p-5 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-[#FF443A]">
                   <Music2 className="w-4 h-4" />
                   <span>Track Credits</span>
                 </div>
                 <dl className="space-y-2 text-xs">
-                  <div className="flex justify-between gap-3 border-b border-[#EAE0D0]/[0.06] pb-1.5">
-                    <dt className="text-[#9E9384]">Performing Artist</dt>
-                    <dd className="text-[#F5F0E8] font-medium text-right truncate">{track.artist}</dd>
+                  <div className="flex justify-between gap-3 border-b border-white/[0.06] pb-1.5">
+                    <dt className="text-[#A39E9F]">Performing Artist</dt>
+                    <dd className="text-white font-medium text-right truncate">{track.artist}</dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b border-[#EAE0D0]/[0.06] pb-1.5">
-                    <dt className="text-[#9E9384]">Release</dt>
-                    <dd className="text-[#F5F0E8] font-medium text-right truncate">
+                  <div className="flex justify-between gap-3 border-b border-white/[0.06] pb-1.5">
+                    <dt className="text-[#A39E9F]">Release</dt>
+                    <dd className="text-white font-medium text-right truncate">
                       {track.album || 'Studio Single'}
                     </dd>
                   </div>
-                  <div className="flex justify-between gap-3 border-b border-[#EAE0D0]/[0.06] pb-1.5">
-                    <dt className="text-[#9E9384]">Label / Imprint</dt>
-                    <dd className="text-[#F5F0E8] font-medium text-right truncate">{artistProfile.label}</dd>
+                  <div className="flex justify-between gap-3 border-b border-white/[0.06] pb-1.5">
+                    <dt className="text-[#A39E9F]">Label / Imprint</dt>
+                    <dd className="text-white font-medium text-right truncate">{artistProfile.label}</dd>
                   </div>
                   <div className="flex justify-between gap-3">
-                    <dt className="text-[#9E9384]">Duration</dt>
-                    <dd className="text-[#F5F0E8] font-mono tabular-nums font-medium">{track.durationFormatted}</dd>
+                    <dt className="text-[#A39E9F]">Duration</dt>
+                    <dd className="text-white font-mono tabular-nums font-medium">{track.durationFormatted}</dd>
                   </div>
                 </dl>
               </section>
@@ -483,37 +483,37 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
 
             {/* Related Tracks & Same Scene */}
             {relatedTracks.length > 0 && (
-              <section className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-5 space-y-3">
+              <section className="rounded-2xl bg-[#110E0F] border border-white/[0.08] p-5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-display text-sm sm:text-base font-bold text-[#F5F0E8]">
+                  <h3 className="font-display text-sm sm:text-base font-bold text-white">
                     More in This Sound &amp; Scene
                   </h3>
-                  <span className="text-xs text-[#9E9384]">Tap to play</span>
+                  <span className="text-xs text-[#A39E9F]">Tap to play</span>
                 </div>
-                <div className="divide-y divide-[#EAE0D0]/[0.06]">
+                <div className="divide-y divide-white/[0.06]">
                   {relatedTracks.map((rel) => (
                     <button
                       type="button"
                       key={rel.id}
                       onClick={() => onPlayTrack(rel, [rel, ...relatedTracks])}
-                      className="w-full py-2.5 flex items-center gap-3 text-left hover:bg-[#EAE0D0]/[0.04] px-2 -mx-2 rounded-xl transition-colors cursor-pointer group"
+                      className="w-full py-2.5 flex items-center gap-3 text-left hover:bg-white/[0.04] px-2 -mx-2 rounded-xl transition-colors cursor-pointer group"
                     >
                       <CoverImage
                         src={rel.thumbnail}
                         alt={rel.title}
                         youtubeId={rel.youtubeId}
-                        className="w-10 h-10 rounded-lg object-cover shrink-0 bg-[#24201B]"
+                        className="w-10 h-10 rounded-lg object-cover shrink-0 bg-[#171213]"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs sm:text-sm font-semibold text-[#F5F0E8] group-hover:text-[#DFCCB0] truncate">
+                        <div className="text-xs sm:text-sm font-semibold text-white group-hover:text-[#FF443A] truncate">
                           {rel.title}
                         </div>
-                        <div className="text-[11px] text-[#9E9384] truncate">
+                        <div className="text-[11px] text-[#A39E9F] truncate">
                           {rel.artist}
                           {rel.country ? ` · ${rel.country}` : ''}
                         </div>
                       </div>
-                      <span className="text-xs font-mono tabular-nums text-[#8F8476] shrink-0">
+                      <span className="text-xs font-mono tabular-nums text-[#6F6A6B] shrink-0">
                         {rel.durationFormatted}
                       </span>
                     </button>

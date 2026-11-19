@@ -32,7 +32,7 @@ class BackgroundAudioService : Service() {
     private val artworkExecutor = Executors.newSingleThreadExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    private var currentTitle: String = "SpotiTube"
+    private var currentTitle: String = "Kiddwave"
     private var currentArtist: String = "Global Soundstage"
     private var currentArtworkUrl: String = ""
     private var currentDurationMs: Long = 0L
@@ -139,7 +139,7 @@ class BackgroundAudioService : Service() {
 
         hasActiveTrack = true
         isCurrentlyPlaying = intent?.getBooleanExtra(EXTRA_IS_PLAYING, true) ?: true
-        currentTitle = intent?.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: "SpotiTube"
+        currentTitle = intent?.getStringExtra(EXTRA_TITLE)?.takeIf { it.isNotBlank() } ?: "Kiddwave"
         currentArtist = intent?.getStringExtra(EXTRA_ARTIST)?.takeIf { it.isNotBlank() } ?: "Global Soundstage"
         val incomingArt = intent?.getStringExtra(EXTRA_ARTWORK_URL).orEmpty()
         currentDurationMs = intent?.getLongExtra(EXTRA_DURATION_MS, 0L) ?: 0L
@@ -194,7 +194,7 @@ class BackgroundAudioService : Service() {
         val metadataBuilder = MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_TITLE, currentTitle)
             .putString(MediaMetadataCompat.METADATA_KEY_ARTIST, currentArtist)
-            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "SpotiTube")
+            .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, "Kiddwave")
         if (currentDurationMs > 0L) {
             metadataBuilder.putLong(MediaMetadataCompat.METADATA_KEY_DURATION, currentDurationMs)
         }
@@ -284,7 +284,7 @@ class BackgroundAudioService : Service() {
             .setLargeIcon(artwork)
             .setContentTitle(currentTitle)
             .setContentText(currentArtist)
-            .setSubText("SpotiTube")
+            .setSubText("Kiddwave")
             .setContentIntent(contentPendingIntent)
             .setDeleteIntent(stopPendingIntent)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)

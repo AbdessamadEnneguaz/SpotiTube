@@ -44,15 +44,15 @@ export const RecentPage: React.FC<RecentPageProps> = ({
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
         <div>
-          <div className="text-xs font-medium text-[#DFCCB0] flex items-center gap-1.5 mb-1">
+          <div className="text-xs font-semibold text-[#FF443A] flex items-center gap-1.5 mb-1">
             <History className="w-3.5 h-3.5" />
             <span>Offline Vault &amp; History</span>
           </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#F5F0E8] tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             Recently Played &amp; Cached
           </h1>
-          <p className="text-xs sm:text-sm text-[#9E9384] mt-1">
-            Tracks you play are cached locally for faster loading &amp; offline playback
+          <p className="text-xs sm:text-sm text-[#A39E9F] mt-1">
+            Tracks you play are cached locally for instant playback &amp; offline access
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export const RecentPage: React.FC<RecentPageProps> = ({
           <button
             type="button"
             onClick={() => onPlayTrack(tracksToShow[0], tracksToShow)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#D8C3A5] hover:bg-[#E4D3BA] text-[#12100E] font-bold text-xs transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#EF2323] hover:bg-[#FF3830] text-white font-bold text-xs transition-colors cursor-pointer shrink-0 self-start sm:self-auto shadow-[0_4px_14px_rgba(239,35,35,0.3)]"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Play Cached ({tracksToShow.length})</span>
@@ -69,15 +69,15 @@ export const RecentPage: React.FC<RecentPageProps> = ({
       </div>
 
       {tracksToShow.length === 0 ? (
-        <div className="rounded-2xl bg-[#1B1815] border border-[#EAE0D0]/[0.08] p-8 text-center space-y-2">
-          <p className="font-display text-base font-bold text-[#F5F0E8]">No cached tracks yet</p>
-          <p className="text-xs sm:text-sm text-[#9E9384]">
+        <div className="rounded-2xl bg-[#110E0F] border border-white/[0.08] p-8 text-center space-y-2">
+          <p className="font-display text-base font-bold text-white">No cached tracks yet</p>
+          <p className="text-xs sm:text-sm text-[#A39E9F]">
             Play any track from Countries, Mixes, or Search to save it here automatically.
           </p>
         </div>
       ) : (
         <div className="space-y-1">
-          <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#9E9384] border-b border-[#EAE0D0]/[0.07]">
+          <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#A39E9F] border-b border-white/[0.08]">
             <span className="w-6 text-center shrink-0">#</span>
             <span className="flex-1 min-w-0">Title</span>
             <span className="hidden md:block w-1/4">Album</span>

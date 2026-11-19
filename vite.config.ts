@@ -20,12 +20,12 @@ export default defineConfig(() => {
         ],
         manifest: {
           id: '/',
-          name: 'SpotiTube - Global Music Soundstage',
-          short_name: 'SpotiTube',
+          name: 'Kiddwave - Global Music Soundstage',
+          short_name: 'Kiddwave',
           description:
-            'Global music discovery soundstage with multi-country collections, live search, and offline caching.',
-          theme_color: '#12100E',
-          background_color: '#12100E',
+            'Kiddwave global music soundstage with multi-country collections, instant playback, and offline caching.',
+          theme_color: '#070607',
+          background_color: '#070607',
           display: 'standalone',
           start_url: '/',
           scope: '/',

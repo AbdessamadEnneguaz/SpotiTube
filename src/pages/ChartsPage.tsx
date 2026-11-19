@@ -53,11 +53,11 @@ export const ChartsPage: React.FC<ChartsPageProps> = ({
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-2">
         <div>
-          <div className="text-xs font-medium text-[#DFCCB0] flex items-center gap-1.5 mb-1">
+          <div className="text-xs font-semibold text-[#FF443A] flex items-center gap-1.5 mb-1">
             <BarChart3 className="w-3.5 h-3.5" />
             <span>Global Charts</span>
           </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-[#F5F0E8] tracking-tight">
+          <h1 className="font-display text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
             {selectedRegion === 'all'
               ? 'All Regional Charts'
               : selectedRegion === 'global'
@@ -65,7 +65,7 @@ export const ChartsPage: React.FC<ChartsPageProps> = ({
                 : `${selectedRegion.charAt(0).toUpperCase()}${selectedRegion.slice(1)} Selection`}
           </h1>
         </div>
-        <span className="text-xs font-mono tabular-nums text-[#9E9384]">
+        <span className="text-xs font-mono tabular-nums text-[#A39E9F]">
           {tracks.length} tracks
         </span>
       </div>
@@ -81,8 +81,8 @@ export const ChartsPage: React.FC<ChartsPageProps> = ({
               onClick={() => onSelectRegion(region.id)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer border ${
                 isActive
-                  ? 'bg-[#D8C3A5] text-[#12100E] border-[#D8C3A5] font-bold'
-                  : 'bg-[#1B1815] text-[#C8BEB0] border-[#EAE0D0]/[0.08] hover:bg-[#24201B] hover:text-[#F5F0E8]'
+                  ? 'bg-[#EF2323] text-white border-[#EF2323] font-bold shadow-[0_4px_12px_rgba(239,35,35,0.3)]'
+                  : 'bg-[#110E0F] text-[#D0CBCC] border-white/[0.08] hover:bg-[#171213] hover:text-white'
               }`}
             >
               {region.label}
@@ -92,7 +92,7 @@ export const ChartsPage: React.FC<ChartsPageProps> = ({
       </div>
 
       <div className="space-y-1">
-        <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#9E9384] border-b border-[#EAE0D0]/[0.07]">
+        <div className="flex items-center gap-2.5 sm:gap-4 px-2.5 sm:px-4 py-2 text-xs font-semibold text-[#A39E9F] border-b border-white/[0.08]">
           <span className="w-6 text-center shrink-0">#</span>
           <span className="flex-1 min-w-0">Title</span>
           <span className="hidden md:block w-1/4">Album</span>

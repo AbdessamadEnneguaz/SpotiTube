@@ -65,10 +65,10 @@ export const Header: React.FC<HeaderProps> = React.memo(({
     ? recentSearches.filter(term => term.toLowerCase().includes(searchQuery.trim().toLowerCase()))
     : recentSearches;
 
-  const showBack = canGoBack || currentView !== 'home';
+  const showBack = currentView !== 'home';
 
   return (
-    <header className="sticky top-0 z-30 bg-[#12100E]/92 backdrop-blur-xl px-3 sm:px-5 md:px-7 py-2.5 sm:py-3 flex flex-col gap-2 border-b border-[#EAE0D0]/[0.08]">
+    <header className="sticky top-0 z-30 bg-[#070607]/92 backdrop-blur-xl px-3 sm:px-5 md:px-7 py-2.5 sm:py-3 flex flex-col gap-2 border-b border-white/[0.08]">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
         {/* Mobile Top Row */}
         <div className="flex items-center justify-between sm:hidden">
@@ -77,18 +77,18 @@ export const Header: React.FC<HeaderProps> = React.memo(({
               type="button"
               onClick={onBack}
               aria-label="Back"
-              className="flex items-center gap-1 px-2.5 h-8 rounded-lg bg-[#1B1815] border border-[#EAE0D0]/12 text-[#E4DDD2] hover:text-[#F5F0E8] text-xs font-semibold cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1 px-2.5 h-9 rounded-lg bg-[#110E0F] border border-white/12 text-[#D0CBCC] hover:text-white text-xs font-semibold cursor-pointer whitespace-nowrap"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4 text-[#FF443A]" />
               <span>Back</span>
             </button>
           ) : (
-            <div className="flex items-center gap-2 text-[#F5F0E8]">
-              <div className="w-7 h-7 rounded-lg bg-[#D8C3A5] flex items-center justify-center text-[#12100E]">
+            <div className="flex items-center gap-2 text-white">
+              <div className="w-7 h-7 rounded-lg bg-[#EF2323] flex items-center justify-center text-white shadow-[0_4px_12px_rgba(239,35,35,0.35)]">
                 <Disc3 className="w-4 h-4" />
               </div>
-              <span className="font-display font-bold text-base tracking-tight text-[#F5F0E8] whitespace-nowrap">
-                SpotiTube
+              <span className="font-display font-extrabold text-base tracking-tight text-white whitespace-nowrap">
+                Kidd<span className="text-[#EF2323]">wave</span>
               </span>
             </div>
           )}
@@ -100,9 +100,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
               onClick={onOpenSleepTimer}
               title="Sleep Timer"
               aria-label="Sleep timer settings"
-              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#1B1815] border border-[#EAE0D0]/12 text-[#E4DDD2] hover:border-[#D8C3A5]/50 cursor-pointer"
+              className="w-9 h-9 rounded-lg flex items-center justify-center bg-[#110E0F] border border-white/12 text-[#D0CBCC] hover:border-[#EF2323]/50 cursor-pointer"
             >
-              <Moon className="w-3.5 h-3.5 text-[#DFCCB0]" />
+              <Moon className="w-3.5 h-3.5 text-[#FF443A]" />
             </button>
 
             <button
@@ -110,9 +110,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
               onClick={() => onOpenLegal('privacy')}
               title="Privacy Policy, Terms & DMCA"
               aria-label="Privacy and Legal documentation"
-              className="flex items-center gap-1 px-2.5 h-8 rounded-lg text-[11px] font-semibold bg-[#1B1815] border border-[#EAE0D0]/12 text-[#E4DDD2] hover:border-[#D8C3A5]/50 cursor-pointer whitespace-nowrap"
+              className="flex items-center gap-1 px-2.5 h-9 rounded-lg text-[11px] font-semibold bg-[#110E0F] border border-white/12 text-[#D0CBCC] hover:border-[#EF2323]/50 cursor-pointer whitespace-nowrap"
             >
-              <Shield className="w-3.5 h-3.5 text-[#D8C3A5]" />
+              <Shield className="w-3.5 h-3.5 text-[#FF443A]" />
               <span>Legal</span>
             </button>
           </div>
@@ -125,16 +125,16 @@ export const Header: React.FC<HeaderProps> = React.memo(({
               type="button"
               onClick={onBack}
               aria-label="Back"
-              className="hidden sm:inline-flex items-center gap-1 px-3 h-9 rounded-xl bg-[#1B1815] border border-[#EAE0D0]/12 hover:border-[#D8C3A5]/45 text-[#C8BEB0] hover:text-[#F5F0E8] text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
+              className="hidden sm:inline-flex items-center gap-1 px-3 h-9 rounded-xl bg-[#110E0F] border border-white/12 hover:border-[#EF2323]/50 text-[#D0CBCC] hover:text-white text-xs font-semibold transition-colors cursor-pointer shrink-0 whitespace-nowrap"
             >
-              <ChevronLeft className="w-4 h-4" />
+              <ChevronLeft className="w-4 h-4 text-[#FF443A]" />
               <span>Back</span>
             </button>
           )}
 
           <div ref={searchWrapperRef} className="relative flex-1">
             <div className="relative" onClick={handleWrapperClick}>
-              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#9E9384]">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[#A39E9F]">
                 <Search className="w-4 h-4" />
               </div>
               <input
@@ -167,7 +167,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                     : 'Search songs, artists, countries, genres...'
                 }
                 aria-label="Search music"
-                className="w-full bg-[#1B1815] hover:bg-[#231F1B] focus:bg-[#231F1B] text-[#F5F0E8] text-sm pl-10 pr-9 py-2 rounded-xl border border-[#EAE0D0]/12 focus:border-[#D8C3A5] focus:outline-none transition-colors placeholder:text-[#8F8476] select-text"
+                className="w-full bg-[#110E0F] hover:bg-[#171213] focus:bg-[#171213] text-[#F4F1F1] text-sm pl-10 pr-9 py-2 rounded-xl border border-white/12 focus:border-[#EF2323] focus:outline-none transition-colors placeholder:text-[#6F6A6B] select-text"
               />
               {searchQuery && (
                 <button
@@ -179,7 +179,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                     searchInputRef.current?.focus({ preventScroll: true });
                   }}
                   aria-label="Clear search query"
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#9E9384] hover:text-[#F5F0E8] cursor-pointer"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-[#A39E9F] hover:text-white cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -191,29 +191,29 @@ export const Header: React.FC<HeaderProps> = React.memo(({
               <div
                 role="listbox"
                 aria-label="Search history suggestions"
-                className="animate-dropdown-reveal absolute left-0 right-0 top-full mt-2 bg-[#1B1815] border border-[#EAE0D0]/14 rounded-xl shadow-2xl overflow-hidden z-50"
+                className="animate-dropdown-reveal absolute left-0 right-0 top-full mt-2 bg-[#110E0F] border border-white/14 rounded-xl shadow-2xl overflow-hidden z-50"
               >
-                <div className="flex items-center justify-between px-3.5 py-2 border-b border-[#EAE0D0]/[0.07] bg-black/25">
-                  <span className="text-[11px] font-semibold text-[#9E9384] flex items-center gap-1.5">
-                    <History className="w-3.5 h-3.5 text-[#D8C3A5]" />
+                <div className="flex items-center justify-between px-3.5 py-2 border-b border-white/[0.08] bg-black/35">
+                  <span className="text-[11px] font-semibold text-[#A39E9F] flex items-center gap-1.5">
+                    <History className="w-3.5 h-3.5 text-[#FF443A]" />
                     <span>Recent Searches</span>
                   </span>
                   {onClearRecentSearches && (
                     <button
                       type="button"
                       onClick={() => onClearRecentSearches()}
-                      className="text-[11px] font-semibold text-[#9E9384] hover:text-[#F5F0E8] cursor-pointer"
+                      className="text-[11px] font-semibold text-[#A39E9F] hover:text-white cursor-pointer"
                     >
                       Clear all
                     </button>
                   )}
                 </div>
 
-                <div className="max-h-60 overflow-y-auto divide-y divide-[#EAE0D0]/[0.06]">
+                <div className="max-h-60 overflow-y-auto divide-y divide-white/[0.06]">
                   {filteredHistory.slice(0, 7).map((term) => (
                     <div
                       key={term}
-                      className="flex items-center justify-between px-3.5 py-2 hover:bg-[#EAE0D0]/[0.06] transition-colors group"
+                      className="flex items-center justify-between px-3.5 py-2 hover:bg-white/[0.05] transition-colors group"
                     >
                       <button
                         type="button"
@@ -221,11 +221,11 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                           onSelectRecentSearch?.(term);
                           setIsHistoryOpen(false);
                         }}
-                        className="flex items-center gap-2.5 flex-1 min-w-0 text-left text-xs sm:text-sm text-[#E4DDD2] hover:text-[#F5F0E8] cursor-pointer"
+                        className="flex items-center gap-2.5 flex-1 min-w-0 text-left text-xs sm:text-sm text-[#D0CBCC] hover:text-white cursor-pointer"
                       >
-                        <History className="w-3.5 h-3.5 text-[#8F8476] group-hover:text-[#D8C3A5] shrink-0" />
+                        <History className="w-3.5 h-3.5 text-[#6F6A6B] group-hover:text-[#FF443A] shrink-0" />
                         <span className="truncate font-medium">{term}</span>
-                        <ArrowUpRight className="w-3.5 h-3.5 text-[#7A7064] group-hover:text-[#C8BEB0] shrink-0 ml-auto mr-1" />
+                        <ArrowUpRight className="w-3.5 h-3.5 text-[#6F6A6B] group-hover:text-[#D0CBCC] shrink-0 ml-auto mr-1" />
                       </button>
 
                       {onRemoveRecentSearch && (
@@ -236,7 +236,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({
                             onRemoveRecentSearch(term);
                           }}
                           aria-label={`Remove "${term}" from search history`}
-                          className="p-1 rounded-lg text-[#8F8476] hover:text-[#F5F0E8] hover:bg-[#EAE0D0]/10 transition-colors cursor-pointer shrink-0"
+                          className="p-1 rounded-lg text-[#6F6A6B] hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -257,9 +257,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
             onClick={onOpenSleepTimer}
             title="Sleep Timer"
             aria-label="Sleep timer settings"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#1B1815] border border-[#EAE0D0]/12 text-[#C8BEB0] hover:border-[#EAE0D0]/25 hover:text-[#F5F0E8] transition-colors cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#110E0F] border border-white/12 text-[#D0CBCC] hover:border-[#EF2323]/45 hover:text-white transition-colors cursor-pointer whitespace-nowrap"
           >
-            <Moon className="w-3.5 h-3.5 text-[#DFCCB0]" />
+            <Moon className="w-3.5 h-3.5 text-[#FF443A]" />
             <span className="hidden lg:inline">Sleep Timer</span>
           </button>
 
@@ -268,9 +268,9 @@ export const Header: React.FC<HeaderProps> = React.memo(({
             onClick={() => onOpenLegal('privacy')}
             title="Privacy Policy, Terms of Service & Copyright"
             aria-label="Privacy and Legal documentation"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#1B1815] border border-[#EAE0D0]/12 hover:border-[#EAE0D0]/25 text-[#C8BEB0] hover:text-[#F5F0E8] transition-colors cursor-pointer whitespace-nowrap"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-[#110E0F] border border-white/12 hover:border-[#EF2323]/45 text-[#D0CBCC] hover:text-white transition-colors cursor-pointer whitespace-nowrap"
           >
-            <Shield className="w-3.5 h-3.5 text-[#D8C3A5]" />
+            <Shield className="w-3.5 h-3.5 text-[#FF443A]" />
             <span className="hidden lg:inline">Privacy &amp; Legal</span>
             <span className="lg:hidden">Legal</span>
           </button>

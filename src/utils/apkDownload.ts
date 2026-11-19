@@ -4,10 +4,10 @@ export interface ApkInfoResponse {
   filename: string;
 }
 
-const DEFAULT_APK_FILENAME = 'SpotiTube.apk';
+const DEFAULT_APK_FILENAME = 'Kiddwave.apk';
 
 /**
- * Validates that an external APK URL uses HTTPS or a safe local relative path (/SpotiTube.apk).
+ * Validates that an external APK URL uses HTTPS or a safe local relative path (/Kiddwave.apk).
  */
 export function isSafeApkDownloadUrl(raw: unknown): raw is string {
   if (typeof raw !== 'string') return false;
@@ -49,7 +49,7 @@ export function resolveApkDownloadConfig(params: {
   if (params.localApkExists) {
     return {
       available: true,
-      downloadUrl: '/SpotiTube.apk',
+      downloadUrl: '/Kiddwave.apk',
       filename: DEFAULT_APK_FILENAME
     };
   }
