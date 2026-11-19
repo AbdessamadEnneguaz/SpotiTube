@@ -159,15 +159,24 @@ class BackgroundAudioService : Service() {
     private fun fetchArtworkAsync(urlStr: String) {
         artworkExecutor.execute {
             val loaded = try {
-                val conn = (URL(urlStr).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 3000
-                    readTimeout = 3000
-                    instanceFollowRedirects = true
-                }
-                if (conn.responseCode in 200..299) {
-                    conn.inputStream.use { BitmapFactory.decodeStream(it) }
-                } else {
+                val parsed = URL(urlStr)
+                if (!parsed.protocol.equals("https", ignoreCase = true)) {
                     null
+                } else {
+                    val conn = (parsed.openConnection() as HttpURLConnection).apply {
+                        connectTimeout = 3000
+                        readTimeout = 3000
+                        instanceFollowRedirects = false
+                    }
+                    try {
+                        if (conn.responseCode in 200..299 && (conn.contentLength <= 2 * 1024 * 1024)) {
+                            conn.inputStream.use { BitmapFactory.decodeStream(it) }
+                        } else {
+                            null
+                        }
+                    } finally {
+                        conn.disconnect()
+                    }
                 }
             } catch (_: Exception) {
                 null

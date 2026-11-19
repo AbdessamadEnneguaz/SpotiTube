@@ -53,6 +53,41 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val BUNDLED_APP_URL = "https://appassets.androidplatform.net/index.html"
+        private val ALLOWED_APP_HOSTS = setOf(
+            "kiddwave.netlify.app",
+            "appassets.androidplatform.net"
+        )
+        private val ALLOWED_ARTWORK_HOSTS = setOf(
+            "kiddwave.netlify.app",
+            "i.ytimg.com",
+            "img.youtube.com",
+            "images.unsplash.com",
+            "upload.wikimedia.org",
+            "thumb.wikimedia.org"
+        )
+    }
+
+    private fun isAllowedAppUri(uri: Uri?): Boolean {
+        val scheme = uri?.scheme?.lowercase() ?: return false
+        val host = uri.host?.lowercase() ?: return false
+        return scheme == "https" && host in ALLOWED_APP_HOSTS
+    }
+
+    private fun sanitizeBridgeArtworkUrl(raw: String?): String {
+        val trimmed = raw?.trim().orEmpty()
+        if (trimmed.isEmpty() || trimmed.length > 512) return ""
+        return try {
+            val uri = Uri.parse(trimmed)
+            val scheme = uri.scheme?.lowercase()
+            val host = uri.host?.lowercase()
+            if (scheme == "https" && host != null && (host in ALLOWED_ARTWORK_HOSTS || host.endsWith(".ytimg.com"))) {
+                trimmed
+            } else {
+                ""
+            }
+        } catch (_: Exception) {
+            ""
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -72,6 +107,8 @@ class MainActivity : AppCompatActivity() {
             .addPathHandler("/", WebViewAssetLoader.AssetsPathHandler(this))
             .build()
 
+        WebView.setWebContentsDebuggingEnabled(false)
+
         webView = BackgroundWebView(this).apply {
             setBackgroundColor(0xFF070607.toInt())
             isFocusable = true
@@ -81,6 +118,19 @@ class MainActivity : AppCompatActivity() {
             settings.databaseEnabled = true
             settings.mediaPlaybackRequiresUserGesture = false
             settings.cacheMode = WebSettings.LOAD_DEFAULT
+            settings.allowFileAccess = false
+            settings.allowContentAccess = false
+            @Suppress("DEPRECATION")
+            settings.allowFileAccessFromFileURLs = false
+            @Suppress("DEPRECATION")
+            settings.allowUniversalAccessFromFileURLs = false
+            settings.setGeolocationEnabled(false)
+            @Suppress("DEPRECATION")
+            settings.saveFormData = false
+            settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                settings.safeBrowsingEnabled = true
+            }
             settings.userAgentString = settings.userAgentString.replace("; wv", "")
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
@@ -90,6 +140,10 @@ class MainActivity : AppCompatActivity() {
                 ): WebResourceResponse? {
                     val url = request?.url ?: return null
                     if (url.host == "appassets.androidplatform.net") {
+                        val pathStr = url.path.orEmpty()
+                        if (pathStr.contains("..")) {
+                            return WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden", emptyMap(), null)
+                        }
                         val response = assetLoader.shouldInterceptRequest(url)
                         if (response != null) return response
                         // SPA fallback for client-side routes
@@ -101,7 +155,24 @@ class MainActivity : AppCompatActivity() {
                 override fun shouldOverrideUrlLoading(
                     view: WebView?,
                     request: WebResourceRequest?
-                ): Boolean = false
+                ): Boolean {
+                    val url = request?.url ?: return true
+                    // Strictly keep top-level WebView locked to Kiddwave origins; block file:/javascript:/untrusted schemes
+                    if (request.isForMainFrame) {
+                        if (isAllowedAppUri(url)) {
+                            return false
+                        }
+                        val scheme = url.scheme?.lowercase()
+                        if (scheme == "https") {
+                            try {
+                                startActivity(Intent(Intent.ACTION_VIEW, url))
+                            } catch (_: Exception) {
+                            }
+                        }
+                        return true
+                    }
+                    return url.scheme?.lowercase() != "https"
+                }
 
                 override fun onReceivedHttpError(
                     view: WebView?,
@@ -179,18 +250,28 @@ class MainActivity : AppCompatActivity() {
     private fun loadRemoteOrBundled(remoteUrl: String) {
         Thread {
             val remoteReachable = try {
-                val conn = (URL(remoteUrl).openConnection() as HttpURLConnection).apply {
-                    requestMethod = "HEAD"
-                    connectTimeout = 2500
-                    readTimeout = 2500
-                    instanceFollowRedirects = true
+                val parsed = Uri.parse(remoteUrl)
+                if (!isAllowedAppUri(parsed)) {
+                    false
+                } else {
+                    val conn = (URL(remoteUrl).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "HEAD"
+                        connectTimeout = 2500
+                        readTimeout = 2500
+                        instanceFollowRedirects = true
+                    }
+                    try {
+                        val code = conn.responseCode
+                        val finalUrl = conn.url?.toString().orEmpty()
+                        val finalUri = Uri.parse(finalUrl)
+                        code in 200..399 &&
+                            isAllowedAppUri(finalUri) &&
+                            !finalUrl.contains("__cookie_check") &&
+                            !finalUrl.contains("accounts.google.com")
+                    } finally {
+                        conn.disconnect()
+                    }
                 }
-                val code = conn.responseCode
-                val finalUrl = conn.url?.toString().orEmpty()
-                conn.disconnect()
-                code in 200..399 &&
-                    !finalUrl.contains("__cookie_check") &&
-                    !finalUrl.contains("accounts.google.com")
             } catch (_: Exception) {
                 false
             }
@@ -264,7 +345,16 @@ class MainActivity : AppCompatActivity() {
             durationMs: Long,
             positionMs: Long
         ) {
+            val safeTitle = title.replace(Regex("[\\u0000-\\u001F\\u007F]"), "").trim().take(140).ifEmpty { "Kiddwave" }
+            val safeArtist = artist.replace(Regex("[\\u0000-\\u001F\\u007F]"), "").trim().take(140).ifEmpty { "Global Soundstage" }
+            val safeArtwork = sanitizeBridgeArtworkUrl(artworkUrl)
+            val safeDuration = durationMs.coerceIn(0L, 12L * 3600L * 1000L)
+            val safePosition = positionMs.coerceIn(0L, 12L * 3600L * 1000L)
+
             runOnUiThread {
+                val activeUri = try { Uri.parse(webView.url.orEmpty()) } catch (_: Exception) { null }
+                if (!isAllowedAppUri(activeUri)) return@runOnUiThread
+
                 webView.keepAliveInBackground = hasTrack && playing
                 val serviceIntent = Intent(this@MainActivity, BackgroundAudioService::class.java).apply {
                     action = if (hasTrack) {
@@ -274,11 +364,11 @@ class MainActivity : AppCompatActivity() {
                     }
                     putExtra(BackgroundAudioService.EXTRA_HAS_TRACK, hasTrack)
                     putExtra(BackgroundAudioService.EXTRA_IS_PLAYING, playing)
-                    putExtra(BackgroundAudioService.EXTRA_TITLE, title)
-                    putExtra(BackgroundAudioService.EXTRA_ARTIST, artist)
-                    putExtra(BackgroundAudioService.EXTRA_ARTWORK_URL, artworkUrl)
-                    putExtra(BackgroundAudioService.EXTRA_DURATION_MS, durationMs)
-                    putExtra(BackgroundAudioService.EXTRA_POSITION_MS, positionMs)
+                    putExtra(BackgroundAudioService.EXTRA_TITLE, safeTitle)
+                    putExtra(BackgroundAudioService.EXTRA_ARTIST, safeArtist)
+                    putExtra(BackgroundAudioService.EXTRA_ARTWORK_URL, safeArtwork)
+                    putExtra(BackgroundAudioService.EXTRA_DURATION_MS, safeDuration)
+                    putExtra(BackgroundAudioService.EXTRA_POSITION_MS, safePosition)
                 }
                 if (hasTrack && playing) {
                     ContextCompat.startForegroundService(this@MainActivity, serviceIntent)

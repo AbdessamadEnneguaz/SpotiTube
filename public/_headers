@@ -1,0 +1,23 @@
+/*
+  Kiddwave Production Security & Binary Delivery Headers (Netlify)
+*/
+
+/Kiddwave.apk
+  Content-Type: application/vnd.android.package-archive
+  Content-Disposition: attachment; filename="Kiddwave.apk"
+  X-Content-Type-Options: nosniff
+  Cache-Control: no-cache, must-revalidate
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  X-Permitted-Cross-Domain-Policies: none
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Opener-Policy: same-origin-allow-popups
+  Cross-Origin-Resource-Policy: same-site
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com; worker-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://images.unsplash.com https://upload.wikimedia.org https://thumb.wikimedia.org; frame-src https://www.youtube.com https://www.youtube-nocookie.com; frame-ancestors 'self'; media-src 'self' data: blob: https:; connect-src 'self' https://pipedapi.kavin.rocks https://pipedapi.adminforge.de https://api.piped.private.coffee https://i.ytimg.com https://images.unsplash.com; object-src 'none'; base-uri 'self'; form-action 'self'; upgrade-insecure-requests

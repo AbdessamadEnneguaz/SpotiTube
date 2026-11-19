@@ -15,8 +15,8 @@ android {
         applicationId = "com.spotitube.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 11
-        versionName = "1.2.0"
+        versionCode = 12
+        versionName = "1.2.1"
         buildConfigField("String", "APP_URL", "\"$kiddwaveAppUrl\"")
     }
 
@@ -26,7 +26,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

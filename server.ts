@@ -1,4 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import fs from 'fs';
 import http from 'http';
 import path from 'path';
@@ -10,6 +11,8 @@ import {
   searchYouTubeTracks
 } from './lib/youtubeSearch.js';
 import {
+  AUDIO_CHUNK_BYTES,
+  isSafeGoogleVideoUrl,
   isValidAudioVideoId,
   resolveAudioStream,
   clampByteRange,
@@ -34,12 +37,22 @@ httpServer.requestTimeout = 15000;
 httpServer.headersTimeout = 10000;
 httpServer.keepAliveTimeout = 5000;
 
-// Security: Reject excessively long URLs / malformed path flooding early
+// Security: Reject excessively long URLs, traversal, null bytes, or CRLF injection early
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (req.url.length > 2048) {
     return res.status(414).json({ error: 'Request URI too long.' });
   }
-  if (req.url.includes('\0')) {
+  let decodedPath = req.path;
+  try {
+    decodedPath = decodeURIComponent(req.path);
+  } catch {
+    return res.status(400).json({ error: 'Malformed request path.' });
+  }
+  if (
+    req.url.includes('\0') ||
+    /[\r\n]/.test(req.url) ||
+    decodedPath.includes('..')
+  ) {
     return res.status(400).json({ error: 'Invalid request.' });
   }
   next();
@@ -49,9 +62,11 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 app.use((_req: Request, res: Response, next: NextFunction) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('X-DNS-Prefetch-Control', 'off');
   res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
   res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   res.setHeader(
@@ -95,6 +110,9 @@ app.get('/api/search', async (req: Request, res: Response) => {
     });
   }
 
+  if (Array.isArray(req.query.q)) {
+    return res.status(400).json({ error: 'Invalid query parameter.' });
+  }
   const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
   const query = sanitizeSearchQuery(rawQuery);
   if (!query) {
@@ -121,6 +139,9 @@ app.get('/api/artist', async (req: Request, res: Response) => {
     return res.status(429).json({ error: 'Too many requests.' });
   }
 
+  if (Array.isArray(req.query.name)) {
+    return res.status(400).json({ error: 'Invalid artist parameter.' });
+  }
   const rawName = typeof req.query.name === 'string' ? req.query.name : '';
   const cleanName = sanitizeSearchQuery(rawName).slice(0, 80);
   if (!cleanName || cleanName.length < 2) {
@@ -141,6 +162,7 @@ app.get('/api/artist', async (req: Request, res: Response) => {
         Accept: 'application/json',
         'User-Agent': 'KiddwaveMusicDirectory/1.0'
       },
+      redirect: 'error',
       signal: AbortSignal.timeout(2500)
     });
 
@@ -189,6 +211,9 @@ app.get('/api/audio', async (req: Request, res: Response) => {
     return res.status(429).json({ error: 'Too many requests.' });
   }
 
+  if (Array.isArray(req.query.v)) {
+    return res.status(400).json({ error: 'Invalid video ID parameter.' });
+  }
   const videoId = typeof req.query.v === 'string' ? req.query.v : '';
   const isProbe = req.query.probe === '1';
 
@@ -205,7 +230,7 @@ app.get('/api/audio', async (req: Request, res: Response) => {
     });
   }
 
-  if (!stream) {
+  if (!stream || !isSafeGoogleVideoUrl(stream.url)) {
     return res.status(404).json({ error: 'Audio stream unavailable.' });
   }
 
@@ -215,6 +240,7 @@ app.get('/api/audio', async (req: Request, res: Response) => {
   try {
     const upstream = await fetch(stream.url, {
       headers: { Range: `bytes=${start}-${end}` },
+      redirect: 'error',
       signal: AbortSignal.timeout(7000)
     });
 
@@ -224,6 +250,9 @@ app.get('/api/audio', async (req: Request, res: Response) => {
     }
 
     const buf = Buffer.from(await upstream.arrayBuffer());
+    if (buf.length > AUDIO_CHUNK_BYTES + 1024) {
+      return res.status(502).json({ error: 'Upstream range exceeded bounds.' });
+    }
     const contentRange =
       upstream.headers.get('content-range') ||
       (stream.contentLength
@@ -260,23 +289,51 @@ const findLocalApkPath = (): string | undefined => {
   });
 };
 
+let cachedApkHash: { path: string; mtimeMs: number; size: number; sha256: string } | null = null;
+const getApkSha256 = (apkPath: string): string | undefined => {
+  try {
+    const st = fs.statSync(apkPath);
+    if (
+      cachedApkHash &&
+      cachedApkHash.path === apkPath &&
+      cachedApkHash.mtimeMs === st.mtimeMs &&
+      cachedApkHash.size === st.size
+    ) {
+      return cachedApkHash.sha256;
+    }
+    const sha256 = crypto.createHash('sha256').update(fs.readFileSync(apkPath)).digest('hex');
+    cachedApkHash = { path: apkPath, mtimeMs: st.mtimeMs, size: st.size, sha256 };
+    return sha256;
+  } catch {
+    return undefined;
+  }
+};
+
 app.get('/api/apk-info', (_req: Request, res: Response) => {
-  const localExists = Boolean(findLocalApkPath());
+  const localPath = findLocalApkPath();
+  const sha256 = localPath ? getApkSha256(localPath) : undefined;
   const config = resolveApkDownloadConfig({
     configuredUrl: process.env.ANDROID_APK_URL || process.env.VITE_ANDROID_APK_URL,
-    localApkExists: localExists
+    localApkExists: Boolean(localPath),
+    sha256
   });
   res.setHeader('Cache-Control', 'no-store');
   return res.json(config);
 });
 
-const handleApkDownload = (_req: Request, res: Response) => {
+const handleApkDownload = (req: Request, res: Response) => {
+  const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+  if (isSearchRateLimited(`apk:${clientIp}`)) {
+    res.setHeader('Retry-After', '60');
+    return res.status(429).json({ error: 'Too many download requests. Please try again shortly.' });
+  }
   const found = findLocalApkPath();
   if (!found) {
     return res.status(404).json({ error: 'APK binary not yet built or uploaded.' });
   }
   res.setHeader('Content-Type', 'application/vnd.android.package-archive');
   res.setHeader('Content-Disposition', 'attachment; filename="Kiddwave.apk"');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Cache-Control', 'no-store, must-revalidate');
   return res.sendFile(found);
 };
@@ -291,6 +348,11 @@ app.get('/api/health', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     service: 'Kiddwave Media Engine'
   });
+});
+
+// Reject unknown /api/* routes cleanly with JSON 404 rather than HTML fallback
+app.all('/api/*', (_req: Request, res: Response) => {
+  return res.status(404).json({ error: 'API endpoint not found.' });
 });
 
 // Start server with Vite middleware in dev or static files in production
