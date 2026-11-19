@@ -1,0 +1,5 @@
+{
+  "latestApkVersion": "1.2.2",
+  "apkDownloadUrl": "/Kiddwave.apk",
+  "releaseNotes": "Migrated live production backend to kiddwave.vercel.app with instant OTA updates."
+}

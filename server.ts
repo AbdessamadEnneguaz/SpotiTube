@@ -355,12 +355,30 @@ app.all('/api/*', (_req: Request, res: Response) => {
   return res.status(404).json({ error: 'API endpoint not found.' });
 });
 
+// Ensure OTA manifests and Service Worker are never aggressively cached
+app.use(['/app-version.json', '/sw.js', '/index.html'], (_req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  next();
+});
+
 // Start server with Vite middleware in dev or static files in production
 async function startServer() {
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.resolve(__dirname, 'dist');
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        setHeaders(res, filePath) {
+          const base = path.basename(filePath);
+          if (base === 'index.html' || base === 'sw.js' || base === 'app-version.json') {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+          } else if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          }
+        }
+      })
+    );
     app.get('*', (_req: Request, res: Response) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {

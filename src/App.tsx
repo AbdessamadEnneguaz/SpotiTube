@@ -6,6 +6,7 @@ import { PlayerBar } from './components/PlayerBar';
 import { YouTubePlayerEmbed } from './components/YouTubePlayerEmbed';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { SplashScreen } from './components/SplashScreen';
+import { ApkUpdateBanner } from './components/ApkUpdateBanner';
 import { HomePage } from './pages/HomePage';
 import {
   CURATED_TRACKS,
@@ -60,6 +61,15 @@ import {
   clampSeekTime,
   EditableTargetLike
 } from './utils/keyboardShortcuts';
+import {
+  AndroidBridgeLike,
+  AppVersionManifest,
+  detectAndroidApkEnv,
+  loadDismissedApkVersion,
+  parseApkVersionManifest,
+  saveDismissedApkVersion,
+  shouldShowApkUpdateBanner
+} from './utils/apkUpdate';
 
 // Lazy-loaded pages (code-split chunks keep initial load light & fast on phones)
 const CountriesPage = lazy(() => import('./pages/CountriesPage'));
@@ -108,6 +118,66 @@ export default function App() {
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
   }, []);
+
+  // In-App Native APK Update Checker (active only inside Android APK wrapper)
+  const [androidApkEnv] = useState(() => {
+    if (typeof window === 'undefined') {
+      return { isAndroidWrapper: false, installedVersion: null as string | null };
+    }
+    const win = window as unknown as {
+      KiddwaveAndroid?: AndroidBridgeLike;
+      SpotiTubeAndroid?: AndroidBridgeLike;
+    };
+    return detectAndroidApkEnv({
+      userAgent: navigator.userAgent,
+      kiddwaveBridge: win.KiddwaveAndroid,
+      legacyBridge: win.SpotiTubeAndroid
+    });
+  });
+  const [apkUpdateManifest, setApkUpdateManifest] = useState<AppVersionManifest | null>(null);
+  const [dismissedApkVersion, setDismissedApkVersion] = useState<string | null>(() =>
+    loadDismissedApkVersion()
+  );
+
+  useEffect(() => {
+    if (!androidApkEnv.isAndroidWrapper) return;
+    let cancelled = false;
+    fetch(`/app-version.json?ts=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { Accept: 'application/json' }
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (cancelled) return;
+        const parsed = parseApkVersionManifest(data);
+        if (parsed) {
+          setApkUpdateManifest(parsed);
+        }
+      })
+      .catch(() => {
+        // Ignore version check error offline
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [androidApkEnv.isAndroidWrapper]);
+
+  const showApkUpdateBanner = useMemo(
+    () =>
+      shouldShowApkUpdateBanner({
+        isAndroidWrapper: androidApkEnv.isAndroidWrapper,
+        installedVersion: androidApkEnv.installedVersion,
+        manifest: apkUpdateManifest,
+        dismissedVersion: dismissedApkVersion
+      }),
+    [androidApkEnv, apkUpdateManifest, dismissedApkVersion]
+  );
+
+  const handleDismissApkUpdate = useCallback(() => {
+    if (!apkUpdateManifest) return;
+    saveDismissedApkVersion(apkUpdateManifest.latestApkVersion);
+    setDismissedApkVersion(apkUpdateManifest.latestApkVersion);
+  }, [apkUpdateManifest]);
 
   // Multi-page Navigation & History Stack
   const [currentRoute, setCurrentRoute] = useState<RouteEntry>(INITIAL_ROUTE);
@@ -974,6 +1044,14 @@ export default function App() {
             onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
             onBack={handleBack}
           />
+
+          {showApkUpdateBanner && apkUpdateManifest && androidApkEnv.installedVersion && (
+            <ApkUpdateBanner
+              manifest={apkUpdateManifest}
+              installedVersion={androidApkEnv.installedVersion}
+              onDismiss={handleDismissApkUpdate}
+            />
+          )}
 
           <main
             ref={mainContentRef}

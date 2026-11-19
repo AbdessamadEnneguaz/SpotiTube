@@ -3,12 +3,35 @@ import { registerSW } from 'virtual:pwa-register';
 import App from './App.tsx';
 import './index.css';
 
-// Register Cache-First PWA Service Worker
+// Register Auto-Updating PWA Service Worker for immediate OTA web/UI delivery
 if ('serviceWorker' in navigator) {
-  registerSW({
+  let hasReloadedForOta = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (hasReloadedForOta) return;
+    hasReloadedForOta = true;
+    window.location.reload();
+  });
+
+  const updateSW = registerSW({
     immediate: true,
-    onOfflineReady() {
-      // Service worker precache and Cache-First runtime rules are active
+    onNeedRefresh() {
+      void updateSW(true);
+    },
+    onRegisteredSW(_swUrl, registration) {
+      if (!registration) return;
+
+      // Check for newly deployed web builds periodically and whenever returning to foreground
+      const checkForOtaUpdate = () => {
+        registration.update().catch(() => {});
+      };
+
+      window.setInterval(checkForOtaUpdate, 30 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          checkForOtaUpdate();
+        }
+      });
     },
   });
 }

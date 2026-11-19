@@ -1,15 +1,31 @@
 /*
-  Kiddwave Production Security & Binary Delivery Headers (Netlify)
+  Kiddwave Production OTA Cache Control, Security & Binary Delivery Headers (Netlify)
 */
+
+/
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/manifest.webmanifest
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/app-version.json
+  Content-Type: application/json; charset=utf-8
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
 
 /Kiddwave.apk
   Content-Type: application/vnd.android.package-archive
   Content-Disposition: attachment; filename="Kiddwave.apk"
   X-Content-Type-Options: nosniff
   Cache-Control: no-cache, must-revalidate
-
-/sw.js
-  Cache-Control: no-cache, no-store, must-revalidate
 
 /*
   X-Content-Type-Options: nosniff

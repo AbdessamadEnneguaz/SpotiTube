@@ -67,7 +67,7 @@ if (!self.define) {
     });
   };
 }
-define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
+define(['./workbox-43e44e5a'], (function (workbox) { 'use strict';
 
   self.skipWaiting();
   workbox.clientsClaim();
@@ -78,13 +78,14 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
    */
   workbox.precacheAndRoute([{
     "url": "/index.html",
-    "revision": "0.1slag28fo7g"
+    "revision": "0.b67r785s0dg"
   }], {});
   workbox.cleanupOutdatedCaches();
   workbox.registerRoute(new workbox.NavigationRoute(workbox.createHandlerBoundToURL("/index.html"), {
     allowlist: [/^\/$/],
-    denylist: [/^\/api\//, /\.apk$/i]
+    denylist: [/^\/api\//, /\.apk$/i, /^\/app-version\.json$/i]
   }));
+  workbox.registerRoute(/\/app-version\.json$/i, new workbox.NetworkOnly(), 'GET');
   workbox.registerRoute(/\/api\/search/i, new workbox.CacheFirst({
     "cacheName": "track-search-metadata-v1",
     plugins: [new workbox.ExpirationPlugin({

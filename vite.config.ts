@@ -52,10 +52,17 @@ export default defineConfig(() => {
           ],
         },
         workbox: {
+          cleanupOutdatedCaches: true,
+          skipWaiting: true,
+          clientsClaim: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           navigateFallback: '/index.html',
-          navigateFallbackDenylist: [/^\/api\//, /\.apk$/i],
+          navigateFallbackDenylist: [/^\/api\//, /\.apk$/i, /^\/app-version\.json$/i],
           runtimeCaching: [
+            {
+              urlPattern: /\/app-version\.json$/i,
+              handler: 'NetworkOnly',
+            },
             {
               urlPattern: /\/api\/search/i,
               handler: 'CacheFirst',

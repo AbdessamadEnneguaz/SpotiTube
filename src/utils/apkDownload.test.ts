@@ -46,7 +46,7 @@ test('resolveApkDownloadConfig prioritizes valid configuredUrl, then localApkExi
 
 test('getDirectApkHref enforces safe fallback to /Kiddwave.apk', () => {
   assert.equal(getDirectApkHref({ downloadUrl: '/Kiddwave.apk' }), '/Kiddwave.apk');
-  assert.equal(getDirectApkHref({ downloadUrl: 'https://kiddwave.netlify.app/Kiddwave.apk' }), 'https://kiddwave.netlify.app/Kiddwave.apk');
+  assert.equal(getDirectApkHref({ downloadUrl: 'https://kiddwave.vercel.app/Kiddwave.apk' }), 'https://kiddwave.vercel.app/Kiddwave.apk');
   assert.equal(getDirectApkHref({ downloadUrl: 'javascript:alert(1)' }), '/Kiddwave.apk');
   assert.equal(getDirectApkHref(null), '/Kiddwave.apk');
 });

@@ -6,6 +6,7 @@ import {
   isApkHeadResponseValid,
   resolveApkDownloadConfig
 } from '../utils/apkDownload';
+import { AndroidBridgeLike, detectAndroidApkEnv } from '../utils/apkUpdate';
 
 export const PWAInstallButton: React.FC = React.memo(() => {
   const [apkInfo, setApkInfo] = useState<ApkInfoResponse>(() =>
@@ -59,7 +60,11 @@ export const PWAInstallButton: React.FC = React.memo(() => {
 
   const isRunningInsideAndroidApk =
     typeof window !== 'undefined' &&
-    Boolean((window as unknown as { SpotiTubeAndroid?: unknown }).SpotiTubeAndroid);
+    detectAndroidApkEnv({
+      userAgent: navigator.userAgent,
+      kiddwaveBridge: (window as unknown as { KiddwaveAndroid?: AndroidBridgeLike }).KiddwaveAndroid,
+      legacyBridge: (window as unknown as { SpotiTubeAndroid?: AndroidBridgeLike }).SpotiTubeAndroid
+    }).isAndroidWrapper;
 
   if (isRunningInsideAndroidApk) {
     return null;

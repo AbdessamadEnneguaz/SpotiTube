@@ -54,11 +54,11 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val BUNDLED_APP_URL = "https://appassets.androidplatform.net/index.html"
         private val ALLOWED_APP_HOSTS = setOf(
-            "kiddwave.netlify.app",
+            "kiddwave.vercel.app",
             "appassets.androidplatform.net"
         )
         private val ALLOWED_ARTWORK_HOSTS = setOf(
-            "kiddwave.netlify.app",
+            "kiddwave.vercel.app",
             "i.ytimg.com",
             "img.youtube.com",
             "images.unsplash.com",
@@ -131,7 +131,8 @@ class MainActivity : AppCompatActivity() {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 settings.safeBrowsingEnabled = true
             }
-            settings.userAgentString = settings.userAgentString.replace("; wv", "")
+            val baseUa = settings.userAgentString.replace("; wv", "").trim()
+            settings.userAgentString = "$baseUa KiddwaveAndroid/${BuildConfig.VERSION_NAME}"
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(
@@ -160,6 +161,13 @@ class MainActivity : AppCompatActivity() {
                     // Strictly keep top-level WebView locked to Kiddwave origins; block file:/javascript:/untrusted schemes
                     if (request.isForMainFrame) {
                         if (isAllowedAppUri(url)) {
+                            if (url.path?.endsWith(".apk", ignoreCase = true) == true) {
+                                try {
+                                    startActivity(Intent(Intent.ACTION_VIEW, url))
+                                } catch (_: Exception) {
+                                }
+                                return true
+                            }
                             return false
                         }
                         val scheme = url.scheme?.lowercase()
@@ -219,14 +227,25 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            addJavascriptInterface(SpotiTubeBridge(), "SpotiTubeAndroid")
+            setDownloadListener { url, _, _, _, _ ->
+                val uri = try { Uri.parse(url) } catch (_: Exception) { null }
+                if (isAllowedAppUri(uri)) {
+                    try {
+                        startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    } catch (_: Exception) {
+                    }
+                }
+            }
+            val bridge = SpotiTubeBridge()
+            addJavascriptInterface(bridge, "SpotiTubeAndroid")
+            addJavascriptInterface(bridge, "KiddwaveAndroid")
         }
 
         setContentView(webView)
         webView.requestFocus()
         val configuredUrl = BuildConfig.APP_URL.takeIf { it.startsWith("https://") }
             ?: getString(R.string.app_url).takeIf { it.startsWith("https://") }
-            ?: "https://kiddwave.netlify.app/"
+            ?: "https://kiddwave.vercel.app/"
         if (configuredUrl == BUNDLED_APP_URL) {
             loadedBundledFallback = true
             webView.loadUrl(BUNDLED_APP_URL)
@@ -330,6 +349,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     inner class SpotiTubeBridge {
+        @JavascriptInterface
+        fun getAppVersion(): String = BuildConfig.VERSION_NAME
+
         @JavascriptInterface
         fun setPlayingState(playing: Boolean, title: String, artist: String) {
             updateMediaState(playing, playing, title, artist, "", 0L, 0L)

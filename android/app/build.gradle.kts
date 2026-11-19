@@ -5,7 +5,7 @@ plugins {
 
 val kiddwaveAppUrl = System.getenv("KIDDWAVE_APP_URL")
     ?.takeIf { it.startsWith("https://") }
-    ?: "https://kiddwave.netlify.app/"
+    ?: "https://kiddwave.vercel.app/"
 
 android {
     namespace = "com.spotitube.app"
@@ -15,8 +15,8 @@ android {
         applicationId = "com.spotitube.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 12
-        versionName = "1.2.1"
+        versionCode = 13
+        versionName = "1.2.2"
         buildConfigField("String", "APP_URL", "\"$kiddwaveAppUrl\"")
     }
 
