@@ -1,3 +1,6 @@
+-keepclassmembers class com.spotitube.app.MainActivity$KiddwaveBridge {
+    @android.webkit.JavascriptInterface <methods>;
+}
 -keepclassmembers class com.spotitube.app.MainActivity$SpotiTubeBridge {
     @android.webkit.JavascriptInterface <methods>;
 }

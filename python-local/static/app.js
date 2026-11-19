@@ -215,27 +215,64 @@ async function fetchTracks(query = '') {
 
 function renderTracks(tracks) {
   if (!tracksContainer) return;
-  tracksContainer.innerHTML = '';
+  tracksContainer.textContent = '';
   if (!tracks.length) {
-    tracksContainer.innerHTML = '<div style="padding:20px; color:#888;">No tracks found</div>';
+    const emptyEl = document.createElement('div');
+    emptyEl.style.padding = '20px';
+    emptyEl.style.color = '#888';
+    emptyEl.textContent = 'No tracks found';
+    tracksContainer.appendChild(emptyEl);
     return;
   }
 
   tracks.forEach((track, index) => {
     const row = document.createElement('div');
     row.className = `track-row ${index === currentIndex ? 'active' : ''}`;
-    row.innerHTML = `
-      <span>${index + 1}</span>
-      <div class="t-info">
-        <img src="${track.thumbnail}" class="t-thumb" alt="" />
-        <div>
-          <div class="t-title">${track.title}</div>
-          <div class="t-artist">${track.artist}</div>
-        </div>
-      </div>
-      <div class="t-artist">${track.genre || 'Music'}</div>
-      <div><button class="btn-play-track">▶</button></div>
-    `;
+
+    const idxSpan = document.createElement('span');
+    idxSpan.textContent = String(index + 1);
+
+    const infoDiv = document.createElement('div');
+    infoDiv.className = 't-info';
+
+    const img = document.createElement('img');
+    img.className = 't-thumb';
+    img.alt = '';
+    const rawThumb = String(track.thumbnail || '');
+    if (rawThumb.startsWith('https://')) {
+      img.src = rawThumb;
+    }
+
+    const metaDiv = document.createElement('div');
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 't-title';
+    titleDiv.textContent = String(track.title || 'Unknown Title');
+
+    const artistDiv = document.createElement('div');
+    artistDiv.className = 't-artist';
+    artistDiv.textContent = String(track.artist || 'Artist');
+
+    metaDiv.appendChild(titleDiv);
+    metaDiv.appendChild(artistDiv);
+    infoDiv.appendChild(img);
+    infoDiv.appendChild(metaDiv);
+
+    const genreDiv = document.createElement('div');
+    genreDiv.className = 't-artist';
+    genreDiv.textContent = String(track.genre || 'Music');
+
+    const actionDiv = document.createElement('div');
+    const playBtn = document.createElement('button');
+    playBtn.className = 'btn-play-track';
+    playBtn.type = 'button';
+    playBtn.textContent = '▶';
+    actionDiv.appendChild(playBtn);
+
+    row.appendChild(idxSpan);
+    row.appendChild(infoDiv);
+    row.appendChild(genreDiv);
+    row.appendChild(actionDiv);
+
     row.addEventListener('click', () => playTrackAtIndex(index));
     tracksContainer.appendChild(row);
   });

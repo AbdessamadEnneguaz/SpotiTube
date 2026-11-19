@@ -125,6 +125,7 @@ class MainActivity : AppCompatActivity() {
             @Suppress("DEPRECATION")
             settings.allowUniversalAccessFromFileURLs = false
             settings.setGeolocationEnabled(false)
+            settings.setSupportMultipleWindows(false)
             @Suppress("DEPRECATION")
             settings.saveFormData = false
             settings.mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
@@ -236,9 +237,8 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            val bridge = SpotiTubeBridge()
-            addJavascriptInterface(bridge, "SpotiTubeAndroid")
-            addJavascriptInterface(bridge, "KiddwaveAndroid")
+            addJavascriptInterface(SpotiTubeBridge(), "SpotiTubeAndroid")
+            addJavascriptInterface(KiddwaveBridge(), "KiddwaveAndroid")
         }
 
         setContentView(webView)
@@ -346,6 +346,11 @@ class MainActivity : AppCompatActivity() {
                 )
             }
         }
+    }
+
+    inner class KiddwaveBridge {
+        @JavascriptInterface
+        fun getAppVersion(): String = BuildConfig.VERSION_NAME
     }
 
     inner class SpotiTubeBridge {

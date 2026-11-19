@@ -3,104 +3,27 @@ from urllib.parse import urlparse, parse_qs, quote
 import urllib.request
 import json
 import re
-import time
 
 try:
     import yt_dlp
 except ImportError:
     yt_dlp = None
 
-# Bounded in-memory rate limiter + global burst limit per warm lambda instance
-_RATE_LIMITS = {}
-_WINDOW_SECONDS = 60
-_MAX_REQUESTS = 40
-_MAX_TRACKED_IPS = 2000
+from api._security import (
+    EXTRACTION_SEMAPHORE,
+    SafeTTLCache,
+    evaluate_cors,
+    extract_client_ip,
+    is_rate_limited,
+    is_valid_video_id,
+    safe_https_thumbnail,
+    safe_urlopen,
+    sanitize_query,
+    validate_search_query,
+)
 
-_GLOBAL_WINDOW = {"count": 0, "reset_at": 0.0}
-_MAX_GLOBAL_PER_MIN = 250
-
-# In-memory TTL search cache (prevents cache stampede / upstream DoS)
-_RESULT_CACHE = {}
-_CACHE_TTL_SECONDS = 300
-_MAX_CACHED_QUERIES = 100
-
-_VIDEO_ID_RE = re.compile(r"^[0-9A-Za-z_-]{11}$")
-
-
-def is_valid_video_id(vid: str) -> bool:
-    return bool(vid and _VIDEO_ID_RE.match(vid))
-
-
-def safe_https_thumbnail(raw_url, video_id: str) -> str:
-    if isinstance(raw_url, str):
-        trimmed = raw_url.strip()
-        if trimmed.startswith("https://"):
-            return trimmed
-    return f"https://i.ytimg.com/vi/{video_id}/mqdefault.jpg"
-
-
-def is_rate_limited(client_ip: str) -> bool:
-    now = time.time()
-
-    # Global burst guard across all IPs (protects against distributed/spoofed IP floods)
-    if now > _GLOBAL_WINDOW["reset_at"]:
-        _GLOBAL_WINDOW["count"] = 1
-        _GLOBAL_WINDOW["reset_at"] = now + _WINDOW_SECONDS
-    else:
-        _GLOBAL_WINDOW["count"] += 1
-        if _GLOBAL_WINDOW["count"] > _MAX_GLOBAL_PER_MIN:
-            return True
-
-    # Prune expired IP entries before adding new ones to cap memory
-    if len(_RATE_LIMITS) >= _MAX_TRACKED_IPS:
-        expired = [ip for ip, rec in _RATE_LIMITS.items() if now > rec["reset_at"]]
-        for ip in expired:
-            _RATE_LIMITS.pop(ip, None)
-        while len(_RATE_LIMITS) >= _MAX_TRACKED_IPS:
-            oldest_ip = next(iter(_RATE_LIMITS))
-            _RATE_LIMITS.pop(oldest_ip, None)
-
-    rec = _RATE_LIMITS.get(client_ip)
-    if not rec or now > rec["reset_at"]:
-        _RATE_LIMITS[client_ip] = {"count": 1, "reset_at": now + _WINDOW_SECONDS}
-        return False
-    if rec["count"] >= _MAX_REQUESTS:
-        return True
-    rec["count"] += 1
-    return False
-
-
-def sanitize_query(raw: str) -> str:
-    q = re.sub(r"[\x00-\x1f\x7f]", "", str(raw or ""))
-    q = re.sub(r"[<>{}\"'\\]", "", q)
-    q = re.sub(r"\s+", " ", q).strip()
-    if len(q) > 100:
-        q = q[:100].strip()
-    return q
-
-
-def _get_cached_results(cache_key: str):
-    entry = _RESULT_CACHE.get(cache_key)
-    if not entry:
-        return None
-    if time.time() > entry["expires_at"]:
-        _RESULT_CACHE.pop(cache_key, None)
-        return None
-    return entry["results"]
-
-
-def _set_cached_results(cache_key: str, results: list):
-    if not results:
-        return
-    now = time.time()
-    if len(_RESULT_CACHE) >= _MAX_CACHED_QUERIES:
-        expired = [k for k, v in _RESULT_CACHE.items() if now > v["expires_at"]]
-        for k in expired:
-            _RESULT_CACHE.pop(k, None)
-        while len(_RESULT_CACHE) >= _MAX_CACHED_QUERIES:
-            oldest_key = next(iter(_RESULT_CACHE))
-            _RESULT_CACHE.pop(oldest_key, None)
-    _RESULT_CACHE[cache_key] = {"results": results, "expires_at": now + _CACHE_TTL_SECONDS}
+# 20-minute bounded TTL cache for repeated searches
+_RESULT_CACHE = SafeTTLCache(maxsize=150, ttl=1200)
 
 
 def format_duration(seconds_val):
@@ -121,6 +44,9 @@ def format_duration(seconds_val):
 def search_with_ytdlp(query: str) -> list:
     if yt_dlp is None:
         return []
+    safe_q = validate_search_query(query)
+    if not safe_q:
+        return []
 
     ydl_opts = {
         "extract_flat": "in_playlist",
@@ -130,12 +56,14 @@ def search_with_ytdlp(query: str) -> list:
         "ignoreerrors": True,
         "noplaylist": True,
         "socket_timeout": 6,
+        "default_search": "ytsearch15",
+        "allowed_extractors": ["youtube", "youtube:search", "youtube:tab"],
     }
 
     results = []
     seen = set()
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(f"ytsearch15:{query}", download=False)
+        info = ydl.extract_info(f"ytsearch15:{safe_q}", download=False)
         entries = info.get("entries", []) if info else []
         for entry in entries:
             if not entry:
@@ -173,6 +101,9 @@ def search_with_ytdlp(query: str) -> list:
 
 
 def search_with_innertube(query: str) -> list:
+    safe_q = validate_search_query(query)
+    if not safe_q:
+        return []
     payload = json.dumps(
         {
             "context": {
@@ -183,7 +114,7 @@ def search_with_innertube(query: str) -> list:
                     "clientVersion": "2.20241101.00.00",
                 }
             },
-            "query": query,
+            "query": safe_q,
         }
     ).encode("utf-8")
 
@@ -201,7 +132,7 @@ def search_with_innertube(query: str) -> list:
         method="POST",
     )
 
-    with urllib.request.urlopen(req, timeout=6) as resp:
+    with safe_urlopen(req, timeout=6) as resp:
         data = json.loads(resp.read().decode("utf-8"))
 
     sections = (
@@ -226,7 +157,10 @@ def search_with_innertube(query: str) -> list:
             seen.add(vid)
 
             title_runs = v.get("title", {}).get("runs", [])
-            title = ("".join(r.get("text", "") for r in title_runs) or v.get("title", {}).get("simpleText", "Unknown Title"))[:160]
+            title = (
+                "".join(r.get("text", "") for r in title_runs)
+                or v.get("title", {}).get("simpleText", "Unknown Title")
+            )[:160]
             owner_runs = v.get("ownerText", {}).get("runs", [])
             channel = ("".join(r.get("text", "") for r in owner_runs) or "YouTube Artist")[:100]
             length_str = v.get("lengthText", {}).get("simpleText", "3:30")
@@ -261,6 +195,9 @@ def search_with_innertube(query: str) -> list:
 
 
 def search_with_piped(query: str) -> list:
+    safe_q = validate_search_query(query)
+    if not safe_q:
+        return []
     mirrors = [
         "https://pipedapi.kavin.rocks",
         "https://pipedapi.adminforge.de",
@@ -268,16 +205,21 @@ def search_with_piped(query: str) -> list:
     ]
     for base in mirrors:
         try:
-            url = f"{base}/search?q={quote(query)}&filter=videos"
-            req = urllib.request.Request(url, headers={"Accept": "application/json", "User-Agent": "SpotiTube/2.0"})
-            with urllib.request.urlopen(req, timeout=4) as resp:
+            url = f"{base}/search?q={quote(safe_q)}&filter=videos"
+            req = urllib.request.Request(
+                url,
+                headers={"Accept": "application/json", "User-Agent": "Kiddwave/2.0"},
+            )
+            with safe_urlopen(req, timeout=4) as resp:
                 if resp.status != 200:
                     continue
                 data = json.loads(resp.read().decode("utf-8"))
                 results = []
                 for item in data.get("items", []):
                     u = str(item.get("url") or "")
-                    m = re.search(r"[?&]v=([0-9A-Za-z_-]{11})", u) or re.search(r"/watch/([0-9A-Za-z_-]{11})", u)
+                    m = re.search(r"[?&]v=([0-9A-Za-z_-]{11})", u) or re.search(
+                        r"/watch/([0-9A-Za-z_-]{11})", u
+                    )
                     if not m:
                         continue
                     vid = m.group(1)
@@ -307,71 +249,121 @@ def search_with_piped(query: str) -> list:
 
 class handler(BaseHTTPRequestHandler):
     def version_string(self):
-        return "SpotiTube"
+        return "Kiddwave"
+
+    def do_OPTIONS(self):
+        cors_ok, cors_headers = evaluate_cors(
+            self.headers.get("origin"), self.headers.get("host")
+        )
+        if not cors_ok:
+            self._send_json(403, {"error": "Origin not allowed."}, extra_headers=cors_headers)
+            return
+        self.send_response(204)
+        for k, v in cors_headers.items():
+            self.send_header(k, v)
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.end_headers()
 
     def do_GET(self):
-        if len(self.path) > 2048:
-            self._send_json(414, {"error": "Request URI too long."})
-            return
-        if "\x00" in self.path:
-            self._send_json(400, {"error": "Invalid request."})
-            return
-
-        forwarded = self.headers.get("x-forwarded-for", "")
-        client_ip = (
-            forwarded.split(",")[0].strip()
-            if forwarded
-            else (self.client_address[0] if self.client_address else "unknown")
-        )
-
-        if is_rate_limited(client_ip):
-            self._send_json(
-                429,
-                {"error": "Too many search requests. Please wait a moment."},
-                extra_headers={"Retry-After": "60"},
-            )
-            return
-
-        parsed = urlparse(self.path)
-        params = parse_qs(parsed.query)
-        query = sanitize_query(params.get("q", [""])[0])
-
-        if not query:
-            self._send_json(200, [])
-            return
-
-        cache_key = query.lower()
-        cached = _get_cached_results(cache_key)
-        if cached is not None:
-            self._send_json(200, cached, cache_control="public, s-maxage=120, stale-while-revalidate=300")
-            return
-
-        results = []
-        # 1. Keyless Python yt-dlp search (unlimited, no API key required)
         try:
-            results = search_with_ytdlp(query)
+            cors_ok, cors_headers = evaluate_cors(
+                self.headers.get("origin"), self.headers.get("host")
+            )
+            if not cors_ok:
+                self._send_json(403, {"error": "Origin not allowed."}, extra_headers=cors_headers)
+                return
+
+            if len(self.path) > 2048:
+                self._send_json(414, {"error": "Request URI too long."}, extra_headers=cors_headers)
+                return
+            if "\x00" in self.path:
+                self._send_json(400, {"error": "Invalid request."}, extra_headers=cors_headers)
+                return
+
+            client_ip = extract_client_ip(
+                self.headers,
+                self.client_address[0] if self.client_address else "unknown",
+            )
+
+            if is_rate_limited(client_ip, bucket="search"):
+                self._send_json(
+                    429,
+                    {"error": "Too many search requests. Please wait a moment."},
+                    extra_headers={**cors_headers, "Retry-After": "60"},
+                )
+                return
+
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query, keep_blank_values=False)
+
+            if "url" in params:
+                self._send_json(
+                    400,
+                    {"error": "Arbitrary URL parameters are not permitted."},
+                    extra_headers=cors_headers,
+                )
+                return
+
+            raw_q = params.get("q", [""])[0]
+            if len(raw_q) > 200:
+                self._send_json(400, {"error": "Query exceeds maximum length."}, extra_headers=cors_headers)
+                return
+
+            query = validate_search_query(raw_q)
+            if not query:
+                self._send_json(200, [], extra_headers=cors_headers)
+                return
+
+            cache_key = query.lower()
+            cached = _RESULT_CACHE.get(cache_key)
+            if cached is not None:
+                self._send_json(
+                    200,
+                    cached,
+                    cache_control="public, s-maxage=300, stale-while-revalidate=600",
+                    extra_headers=cors_headers,
+                )
+                return
+
+            acquired = EXTRACTION_SEMAPHORE.acquire(timeout=2.0)
+            if not acquired:
+                self._send_json(
+                    503,
+                    {"error": "Search service busy. Please retry shortly."},
+                    extra_headers={**cors_headers, "Retry-After": "3"},
+                )
+                return
+
+            try:
+                results = []
+                try:
+                    results = search_with_ytdlp(query)
+                except Exception:
+                    results = []
+
+                if not results:
+                    try:
+                        results = search_with_innertube(query)
+                    except Exception:
+                        results = []
+
+                if not results:
+                    try:
+                        results = search_with_piped(query)
+                    except Exception:
+                        results = []
+            finally:
+                EXTRACTION_SEMAPHORE.release()
+
+            if results:
+                _RESULT_CACHE.set(cache_key, results)
+
+            cache_hdr = (
+                "public, s-maxage=300, stale-while-revalidate=600" if results else "no-store"
+            )
+            self._send_json(200, results, cache_control=cache_hdr, extra_headers=cors_headers)
         except Exception:
-            results = []
-
-        # 2. Keyless Python InnerTube fallback
-        if not results:
-            try:
-                results = search_with_innertube(query)
-            except Exception:
-                results = []
-
-        # 3. Public Piped mirror fallback
-        if not results:
-            try:
-                results = search_with_piped(query)
-            except Exception:
-                results = []
-
-        if results:
-            _set_cached_results(cache_key, results)
-
-        cache_hdr = "public, s-maxage=120, stale-while-revalidate=300" if results else "no-store"
-        self._send_json(200, results, cache_control=cache_hdr)
+            self._send_json(500, {"error": "Internal server error."})
 
     def do_POST(self):
         self._send_json(405, {"error": "Method not allowed."})
@@ -390,6 +382,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
         self.send_header("X-Permitted-Cross-Domain-Policies", "none")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
         self.send_header("X-Robots-Tag", "noindex")
@@ -399,4 +392,3 @@ class handler(BaseHTTPRequestHandler):
                 self.send_header(k, v)
         self.end_headers()
         self.wfile.write(body)
-

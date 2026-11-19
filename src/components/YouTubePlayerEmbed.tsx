@@ -519,15 +519,11 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
           }
           try {
             const win = window as unknown as {
-              KiddwaveAndroid?: {
-                updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
-              };
               SpotiTubeAndroid?: {
                 updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
               };
             };
-            const androidBridge = win.KiddwaveAndroid || win.SpotiTubeAndroid;
-            androidBridge?.updatePlaybackPosition?.(
+            win.SpotiTubeAndroid?.updatePlaybackPosition?.(
               Math.max(0, Math.round(dur * 1000)),
               Math.max(0, Math.round(clampedSec * 1000)),
               isPlayingRef.current
@@ -891,15 +887,11 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         }
         try {
           const win = window as unknown as {
-            KiddwaveAndroid?: {
-              updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
-            };
             SpotiTubeAndroid?: {
               updatePlaybackPosition?: (durationMs: number, positionMs: number, playing: boolean) => void;
             };
           };
-          const androidBridge = win.KiddwaveAndroid || win.SpotiTubeAndroid;
-          androidBridge?.updatePlaybackPosition?.(
+          win.SpotiTubeAndroid?.updatePlaybackPosition?.(
             Math.max(0, Math.round(trackDurSec * 1000)),
             Math.max(0, Math.round(clampedSec * 1000)),
             isPlayingRef.current

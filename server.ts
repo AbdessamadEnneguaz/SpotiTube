@@ -92,8 +92,31 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
 // JSON body parser with strict size limit to prevent payload flooding
 app.use(express.json({ limit: '64kb' }));
 
-// Restrict API routes strictly to GET/HEAD
+// Strict CORS & method lockdown for /api/* routes
+const ALLOWED_API_ORIGINS = new Set([
+  'https://kiddwave.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000'
+]);
+
 app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+  const origin = typeof req.headers.origin === 'string' ? req.headers.origin.trim() : '';
+  const host = typeof req.headers.host === 'string' ? req.headers.host.trim() : '';
+  if (origin) {
+    const isSameHostOrigin = Boolean(host && (origin === `https://${host}` || origin === `http://${host}`));
+    if (!ALLOWED_API_ORIGINS.has(origin) && !isSameHostOrigin) {
+      res.setHeader('Vary', 'Origin');
+      return res.status(403).json({ error: 'Origin not allowed.' });
+    }
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+    res.setHeader('Vary', 'Origin');
+  }
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     return res.status(405).json({ error: 'Method not allowed.' });
   }
@@ -110,6 +133,9 @@ app.get('/api/search', async (req: Request, res: Response) => {
     });
   }
 
+  if (req.query.url !== undefined) {
+    return res.status(400).json({ error: 'Arbitrary URL parameters are not permitted.' });
+  }
   if (Array.isArray(req.query.q)) {
     return res.status(400).json({ error: 'Invalid query parameter.' });
   }
@@ -211,10 +237,13 @@ app.get('/api/audio', async (req: Request, res: Response) => {
     return res.status(429).json({ error: 'Too many requests.' });
   }
 
+  if (req.query.url !== undefined) {
+    return res.status(400).json({ error: 'Arbitrary URL parameters are not permitted.' });
+  }
   if (Array.isArray(req.query.v)) {
     return res.status(400).json({ error: 'Invalid video ID parameter.' });
   }
-  const videoId = typeof req.query.v === 'string' ? req.query.v : '';
+  const videoId = typeof req.query.v === 'string' ? req.query.v : (typeof req.query.id === 'string' ? req.query.id : '');
   const isProbe = req.query.probe === '1';
 
   if (!isValidAudioVideoId(videoId)) {
