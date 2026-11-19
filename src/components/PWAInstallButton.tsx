@@ -85,7 +85,7 @@ export const PWAInstallButton: React.FC = React.memo(() => {
               role="dialog"
               aria-modal="true"
               aria-labelledby="install-app-modal-title"
-              className="w-full max-w-md rounded-2xl bg-[#110E0F] border border-white/14 p-6 shadow-2xl text-[#F4F1F1] relative max-h-[90vh] overflow-y-auto"
+              className="frame-3d w-full max-w-md rounded-2xl p-6 text-[#F4F1F1] relative max-h-[90dvh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -97,7 +97,7 @@ export const PWAInstallButton: React.FC = React.memo(() => {
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="flex items-center gap-2 text-[#FF443A] mb-1">
+              <div className="flex items-center gap-2 text-[#EF4444] mb-1">
                 <Smartphone className="w-4 h-4" />
                 <span className="text-xs font-semibold">Install Kiddwave</span>
               </div>
@@ -109,10 +109,10 @@ export const PWAInstallButton: React.FC = React.memo(() => {
               <div className="mt-4 rounded-xl bg-[#070607]/85 border border-white/10 p-4 space-y-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-sm font-bold text-white flex items-center gap-2 whitespace-nowrap">
-                    <Smartphone className="w-4 h-4 text-[#FF443A] shrink-0" />
+                    <Smartphone className="w-4 h-4 text-[#EF4444] shrink-0" />
                     <span>Android App (.apk)</span>
                   </span>
-                  <span className="text-xs font-medium text-[#FF443A]">
+                  <span className="text-xs font-medium text-[#EF4444]">
                     Background Play
                   </span>
                 </div>
@@ -129,7 +129,7 @@ export const PWAInstallButton: React.FC = React.memo(() => {
                     <a
                       href={apkInfo.downloadUrl}
                       download={apkInfo.filename}
-                      className="flex items-center justify-center gap-2 w-full rounded-xl bg-[#EF2323] hover:bg-[#FF3830] py-2.5 px-4 text-xs font-bold text-white transition-colors shadow-[0_6px_18px_rgba(239,35,35,0.35)]"
+                      className="flex items-center justify-center gap-2 w-full rounded-xl bg-[#EF4444] hover:bg-[#DC2626] py-2.5 px-4 text-xs font-bold text-white transition-colors border border-[#F87171]/40 shadow-[0_6px_18px_rgba(239,68,68,0.38)]"
                     >
                       <Download className="w-4 h-4" />
                       <span>Download {apkInfo.filename}</span>
@@ -140,7 +140,7 @@ export const PWAInstallButton: React.FC = React.memo(() => {
                   </div>
                 ) : (
                   <div className="rounded-lg bg-[#171213] border border-white/10 p-3 space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-[#FF443A] text-xs font-semibold">
+                    <div className="flex items-center gap-1.5 text-[#EF4444] text-xs font-semibold">
                       <Wrench className="w-3.5 h-3.5 shrink-0" />
                       <span>Android APK not hosted yet</span>
                     </div>
@@ -159,7 +159,7 @@ export const PWAInstallButton: React.FC = React.memo(() => {
                     Web App (PWA)
                   </span>
                   {isInstallable && (
-                    <span className="text-xs font-semibold text-[#FF443A] flex items-center gap-1">
+                    <span className="text-xs font-semibold text-[#EF4444] flex items-center gap-1">
                       <CheckCircle2 className="w-3.5 h-3.5" /> Ready
                     </span>
                   )}
@@ -178,7 +178,7 @@ export const PWAInstallButton: React.FC = React.memo(() => {
                   </button>
                 ) : isIOS ? (
                   <p className="text-xs text-[#D0CBCC] leading-relaxed">
-                    Tap <Share className="inline w-3.5 h-3.5 text-[#FF443A] mx-0.5" /> <strong>Share</strong> in Safari, then choose <strong>Add to Home Screen</strong>.
+                    Tap <Share className="inline w-3.5 h-3.5 text-[#EF4444] mx-0.5" /> <strong>Share</strong> in Safari, then choose <strong>Add to Home Screen</strong>.
                   </p>
                 ) : (
                   <p className="text-xs text-[#D0CBCC] leading-relaxed">
@@ -206,7 +206,7 @@ export const PWAInstallButton: React.FC = React.memo(() => {
         type="button"
         onClick={() => setShowGuide(true)}
         aria-label="Install Kiddwave app"
-        className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold bg-[#EF2323] hover:bg-[#FF3830] text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap shadow-[0_4px_14px_rgba(239,35,35,0.3)]"
+        className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold bg-[#EF4444] hover:bg-[#DC2626] text-white transition-colors cursor-pointer shrink-0 whitespace-nowrap border border-[#F87171]/40 shadow-[0_4px_14px_rgba(239,68,68,0.34)]"
       >
         <Download className="w-3.5 h-3.5" />
         <span className="hidden md:inline">Install App</span>

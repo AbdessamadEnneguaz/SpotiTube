@@ -153,12 +153,14 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(webView)
         webView.requestFocus()
-        val remoteUrl = BuildConfig.APP_URL.takeIf { it.startsWith("https://") }
-        if (remoteUrl == null || remoteUrl == BUNDLED_APP_URL) {
+        val configuredUrl = BuildConfig.APP_URL.takeIf { it.startsWith("https://") }
+            ?: getString(R.string.app_url).takeIf { it.startsWith("https://") }
+            ?: "https://kiddwave.netlify.app/"
+        if (configuredUrl == BUNDLED_APP_URL) {
             loadedBundledFallback = true
             webView.loadUrl(BUNDLED_APP_URL)
         } else {
-            loadRemoteOrBundled(remoteUrl)
+            loadRemoteOrBundled(configuredUrl)
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
@@ -179,16 +181,16 @@ class MainActivity : AppCompatActivity() {
             val remoteReachable = try {
                 val conn = (URL(remoteUrl).openConnection() as HttpURLConnection).apply {
                     requestMethod = "HEAD"
-                    connectTimeout = 1800
-                    readTimeout = 1800
-                    instanceFollowRedirects = false
+                    connectTimeout = 2500
+                    readTimeout = 2500
+                    instanceFollowRedirects = true
                 }
                 val code = conn.responseCode
-                val location = conn.getHeaderField("Location").orEmpty()
+                val finalUrl = conn.url?.toString().orEmpty()
                 conn.disconnect()
-                code in 200..299 &&
-                    !location.contains("__cookie_check") &&
-                    !location.contains("accounts.google.com")
+                code in 200..399 &&
+                    !finalUrl.contains("__cookie_check") &&
+                    !finalUrl.contains("accounts.google.com")
             } catch (_: Exception) {
                 false
             }

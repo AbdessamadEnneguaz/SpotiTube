@@ -27,16 +27,16 @@ export const CountriesPage: React.FC<CountriesPageProps> = ({ onSelectCountry })
         </span>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
         {WORLD_COUNTRY_PRESETS.map((country) => (
           <button
             type="button"
             key={country.id}
             onClick={() => onSelectCountry(country)}
-            className="card-interactive group text-left p-4 rounded-2xl bg-[#110E0F] hover:bg-[#171213] border border-white/[0.08] hover:border-[#EF2323]/45 cursor-pointer flex items-center justify-between gap-3"
+            className="frame-3d card-interactive group text-left p-4 rounded-2xl cursor-pointer flex items-center justify-between gap-3"
           >
             <div className="min-w-0">
-              <div className="text-[11px] font-semibold text-[#FF443A] capitalize">
+              <div className="text-[11px] font-semibold text-[#EF4444] capitalize">
                 {country.region}
               </div>
               <div className="font-display font-bold text-base text-white truncate mt-0.5">
@@ -46,7 +46,7 @@ export const CountriesPage: React.FC<CountriesPageProps> = ({ onSelectCountry })
                 {country.styleHint}
               </div>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-white/[0.06] group-hover:bg-[#EF2323] text-[#FF443A] group-hover:text-white flex items-center justify-center transition-colors shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-white/[0.06] border border-white/10 group-hover:bg-[#EF4444] group-hover:border-[#F87171]/50 text-[#EF4444] group-hover:text-white flex items-center justify-center transition-colors shrink-0">
               <ArrowRight className="w-4 h-4" />
             </div>
           </button>

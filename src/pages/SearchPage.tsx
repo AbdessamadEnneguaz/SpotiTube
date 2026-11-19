@@ -82,7 +82,7 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                 </span>
               </div>
               {cachedTracksList.length === 0 ? (
-                <div className="rounded-xl bg-[#110E0F] border border-white/[0.08] p-5 text-sm text-[#D0CBCC]">
+                <div className="frame-3d rounded-2xl p-5 text-sm text-[#D0CBCC]">
                   No cached tracks yet. Play any track while online to save it automatically.
                 </div>
               ) : (
@@ -134,13 +134,13 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                   type="button"
                   key={country.id}
                   onClick={() => onSelectSearch(country.query)}
-                  className="card-interactive text-left p-3.5 rounded-xl bg-[#110E0F] hover:bg-[#171213] border border-white/[0.08] hover:border-[#EF2323]/45 cursor-pointer flex flex-col justify-between min-h-[78px]"
+                  className="frame-3d card-interactive text-left p-3.5 rounded-xl cursor-pointer flex flex-col justify-between min-h-[78px]"
                 >
                   <div className="flex items-center justify-between gap-2 w-full">
                     <span className="font-display font-bold text-sm text-white truncate">
                       {country.name}
                     </span>
-                    <ArrowRight className="w-3.5 h-3.5 text-[#FF443A] shrink-0" />
+                    <ArrowRight className="w-3.5 h-3.5 text-[#EF4444] shrink-0" />
                   </div>
                   <span className="text-[11px] text-[#A39E9F] truncate mt-2">
                     {country.styleHint}

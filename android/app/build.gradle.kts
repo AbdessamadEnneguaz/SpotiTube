@@ -3,9 +3,9 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-val spotitubeAppUrl = System.getenv("SPOTITUBE_APP_URL")
+val kiddwaveAppUrl = System.getenv("KIDDWAVE_APP_URL")
     ?.takeIf { it.startsWith("https://") }
-    ?: "https://ais-pre-6gdewyilmuy24zlnrxq6or-846997521525.europe-west2.run.app"
+    ?: "https://kiddwave.netlify.app/"
 
 android {
     namespace = "com.spotitube.app"
@@ -15,9 +15,9 @@ android {
         applicationId = "com.spotitube.app"
         minSdk = 24
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.1.0"
-        buildConfigField("String", "APP_URL", "\"$spotitubeAppUrl\"")
+        versionCode = 11
+        versionName = "1.2.0"
+        buildConfigField("String", "APP_URL", "\"$kiddwaveAppUrl\"")
     }
 
     buildFeatures {

@@ -44,14 +44,14 @@ export const MixesPage: React.FC<MixesPageProps> = ({
           <div
             key={item.id}
             onClick={() => onOpenPlaylist(item.id)}
-            className="card-interactive group flex items-center gap-3.5 bg-[#110E0F] hover:bg-[#171213] border border-white/[0.08] hover:border-[#EF2323]/45 p-3 rounded-2xl cursor-pointer"
+            className="frame-3d card-interactive group flex items-center gap-3.5 p-3 rounded-2xl cursor-pointer"
           >
             <CoverImage
               src={item.coverImage}
               alt={item.name}
               youtubeId={item.tracks[0]?.youtubeId}
               loading="lazy"
-              className="w-20 h-20 rounded-xl object-cover shrink-0 bg-[#070607]"
+              className="w-20 h-20 rounded-xl object-cover shrink-0 bg-[#070607] border border-white/10"
             />
             <div className="flex-1 min-w-0">
               <div className="font-display font-bold text-sm sm:text-base text-white truncate">
@@ -60,7 +60,7 @@ export const MixesPage: React.FC<MixesPageProps> = ({
               <p className="text-xs text-[#A39E9F] line-clamp-2 mt-0.5">
                 {item.description}
               </p>
-              <div className="text-[11px] text-[#FF443A] mt-1.5 font-medium tabular-nums">
+              <div className="text-[11px] text-[#EF4444] mt-1.5 font-medium tabular-nums">
                 {item.regionLabel || (item.isCustom ? 'Custom' : 'Global')} · {item.tracks.length} tracks
               </div>
             </div>
@@ -73,7 +73,7 @@ export const MixesPage: React.FC<MixesPageProps> = ({
                 if (first) onPlayPlaylist(first, item.tracks);
               }}
               aria-label={`Play ${item.name}`}
-              className="w-10 h-10 rounded-xl bg-white/[0.06] group-hover:bg-[#EF2323] text-[#F4F1F1] group-hover:text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+              className="w-10 h-10 rounded-xl bg-white/[0.06] border border-white/10 group-hover:bg-[#EF4444] group-hover:border-[#F87171]/50 text-[#F4F1F1] group-hover:text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
             >
               <Play className="w-4 h-4 fill-current translate-x-0.2" />
             </button>

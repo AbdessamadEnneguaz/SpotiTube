@@ -17,13 +17,14 @@ export default defineConfig(() => {
           'pwa-192x192.png',
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
+          'og-image.png',
         ],
         manifest: {
           id: '/',
-          name: 'Kiddwave - Global Music Soundstage',
+          name: 'Kiddwave — High-Speed Music Streaming & Discovery',
           short_name: 'Kiddwave',
           description:
-            'Kiddwave global music soundstage with multi-country collections, instant playback, and offline caching.',
+            'High-speed global music streaming and discovery with zero-lag playback, regional charts, and offline track caching.',
           theme_color: '#070607',
           background_color: '#070607',
           display: 'standalone',

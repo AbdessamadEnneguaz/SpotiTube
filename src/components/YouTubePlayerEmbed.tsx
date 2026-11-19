@@ -347,6 +347,8 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
                 const iframeEl = event.target.getIframe?.();
                 if (iframeEl) {
                   iframeEl.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+                  iframeEl.setAttribute('tabindex', '-1');
+                  iframeEl.style.pointerEvents = 'none';
                 }
               } catch {
                 // ignore
@@ -450,7 +452,22 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       }
     };
 
+    const handleWindowBlur = () => {
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        if (active && active.tagName === 'IFRAME' && active.id === 'spotitube-iframe-anchor') {
+          try {
+            (active as HTMLElement).blur();
+            window.focus();
+          } catch {
+            // ignore
+          }
+        }
+      });
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
 
     const timer = setInterval(() => {
       let cur = 0;
@@ -501,6 +518,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       cancelled = true;
       clearInterval(timer);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
       setAudioKeepAlivePlaying(false);
       try {
         keepAliveOscRef.current?.stop();
@@ -571,6 +589,8 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
               const iframeEl = event.target.getIframe?.();
               if (iframeEl) {
                 iframeEl.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
+                iframeEl.setAttribute('tabindex', '-1');
+                iframeEl.style.pointerEvents = 'none';
               }
             } catch {
               // ignore
@@ -835,6 +855,10 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     if (playerRef.current && isPlayerReady) {
       try {
         playerRef.current.seekTo(seekTarget, true);
+        if (document.activeElement?.id === 'spotitube-iframe-anchor') {
+          (document.activeElement as HTMLElement).blur();
+          window.focus();
+        }
       } catch (e) {
         console.warn('Seek error:', e);
       }
@@ -879,9 +903,10 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       {/* Hidden off-screen audio engine */}
       <div
         aria-hidden="true"
+        tabIndex={-1}
         className="fixed -z-10 bottom-0 right-0 w-px h-px opacity-0 pointer-events-none overflow-hidden"
       >
-        <div id="spotitube-iframe-anchor" className="w-[220px] h-[220px]" />
+        <div id="spotitube-iframe-anchor" tabIndex={-1} className="w-[220px] h-[220px]" />
       </div>
     </>
   );

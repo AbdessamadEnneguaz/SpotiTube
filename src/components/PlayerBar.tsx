@@ -12,7 +12,6 @@ import {
   VolumeX,
   ListMusic,
   Maximize2,
-  Disc3,
   Heart,
   Moon,
   UserRound
@@ -20,6 +19,7 @@ import {
 import { Track, RepeatMode } from '../types/music';
 import { formatDuration } from '../utils/formatters';
 import { CoverImage } from './CoverImage';
+import { KiddwaveLogo } from './KiddwaveLogo';
 
 interface PlayerBarProps {
   currentTrack: Track | null;
@@ -96,11 +96,11 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
   };
 
   return (
-    <footer className="bg-[#0B0A0B]/95 backdrop-blur-xl border-t border-white/[0.09] text-[#A39E9F] select-none z-40 relative shrink-0">
+    <footer className="frame-3d-console backdrop-blur-xl text-[#A39E9F] select-none z-40 relative shrink-0 md:pb-[env(safe-area-inset-bottom)]">
       {/* Top Edge Scrubber Line */}
       <div className="relative w-full h-1 bg-white/10 group cursor-pointer">
         <div
-          className="h-full bg-[#EF2323] transition-all duration-150"
+          className="h-full bg-[#EF4444] transition-all duration-150"
           style={{ width: `${progressPercent}%` }}
         />
         <input
@@ -135,7 +135,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 alt={currentTrack.title}
                 youtubeId={currentTrack.youtubeId}
                 loading="eager"
-                className="w-10 h-10 rounded-lg object-cover bg-[#171213] shrink-0"
+                className="w-10 h-10 rounded-lg object-cover bg-[#171213] border border-white/10 shrink-0"
               />
               <div className="min-w-0 flex-1">
                 <div className="text-[#F4F1F1] text-xs font-semibold truncate">
@@ -153,9 +153,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </button>
           ) : (
             <div className="flex items-center gap-2.5 flex-1 min-w-0">
-              <div className="w-10 h-10 rounded-lg bg-[#110E0F] border border-white/[0.08] flex items-center justify-center shrink-0">
-                <Disc3 className="w-4 h-4 text-[#FF443A]" />
-              </div>
+              <KiddwaveLogo size={38} className="shrink-0" />
               <div className="min-w-0">
                 <span className="block text-xs font-semibold text-[#F4F1F1] truncate">Ready to stream</span>
                 <span className="block text-[11px] text-[#6F6A6B] truncate">Select a global track</span>
@@ -171,7 +169,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
               onClick={() => onToggleLike(currentTrack)}
               aria-label={isLiked ? 'Unlike track' : 'Like track'}
               className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
-                isLiked ? 'text-[#FF443A]' : 'text-[#A39E9F] hover:text-white'
+                isLiked ? 'text-[#EF4444]' : 'text-[#A39E9F] hover:text-white'
               }`}
             >
               <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
@@ -183,12 +181,12 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             onClick={onToggleQueue}
             aria-label="Open playback queue"
             className={`min-w-[44px] min-h-[44px] flex items-center justify-center rounded-lg transition-colors cursor-pointer relative ${
-              isQueueOpen ? 'text-[#FF443A]' : 'text-[#A39E9F] hover:text-white'
+              isQueueOpen ? 'text-[#EF4444]' : 'text-[#A39E9F] hover:text-white'
             }`}
           >
             <ListMusic className="w-4 h-4" />
             {queueCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 text-[9px] font-mono tabular-nums font-bold bg-[#EF2323] text-white min-w-[14px] h-3.5 px-0.5 rounded flex items-center justify-center">
+              <span className="absolute top-1.5 right-1.5 text-[9px] font-mono tabular-nums font-bold bg-[#EF4444] text-white min-w-[14px] h-3.5 px-0.5 rounded flex items-center justify-center">
                 {queueCount > 9 ? '9+' : queueCount}
               </span>
             )}
@@ -209,7 +207,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             onClick={onPlayPause}
             aria-label={isPlaying ? 'Pause' : 'Play'}
             disabled={!currentTrack}
-            className="w-10 h-10 rounded-xl bg-[#EF2323] hover:bg-[#FF3830] text-white flex items-center justify-center active:scale-95 transition-all disabled:opacity-35 cursor-pointer shadow-[0_4px_14px_rgba(239,35,35,0.35)]"
+            className="w-10 h-10 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white flex items-center justify-center active:scale-95 transition-all disabled:opacity-35 cursor-pointer border border-[#F87171]/40 shadow-[0_4px_14px_rgba(239,68,68,0.4)]"
           >
             {isPlaying ? (
               <Pause className="w-4 h-4 fill-current" />
@@ -236,9 +234,9 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                   alt={currentTrack.title}
                   youtubeId={currentTrack.youtubeId}
                   loading="eager"
-                  className="w-12 h-12 rounded-lg object-cover bg-[#171213] border border-white/12 transition-transform group-hover:scale-105"
+                  className="w-12 h-12 rounded-xl object-cover bg-[#171213] border border-white/14 shadow-[0_6px_14px_rgba(0,0,0,0.6)] transition-transform group-hover:scale-105"
                 />
-                <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity rounded-lg">
+                <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition-opacity rounded-xl">
                   <Maximize2 className="w-4 h-4" />
                 </div>
               </div>
@@ -247,7 +245,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 <button
                   type="button"
                   onClick={onOpenExpandedCover}
-                  className="text-white text-sm font-semibold truncate hover:text-[#FF443A] transition-colors cursor-pointer block text-left w-full"
+                  className="text-white text-sm font-semibold truncate hover:text-[#EF4444] transition-colors cursor-pointer block text-left w-full"
                 >
                   {currentTrack.title}
                 </button>
@@ -264,7 +262,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
                 onClick={() => onToggleLike(currentTrack)}
                 aria-label={isLiked ? 'Unlike track' : 'Like track'}
                 className={`p-2 rounded-lg transition-colors cursor-pointer shrink-0 ${
-                  isLiked ? 'text-[#FF443A] bg-[#EF2323]/14' : 'text-[#A39E9F] hover:text-white hover:bg-white/[0.06]'
+                  isLiked ? 'text-[#EF4444] bg-[#EF4444]/14' : 'text-[#A39E9F] hover:text-white hover:bg-white/[0.06]'
                 }`}
               >
                 <Heart className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
@@ -272,12 +270,10 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             </>
           ) : (
             <div className="flex items-center gap-3 text-[#6F6A6B]">
-              <div className="w-12 h-12 rounded-lg bg-[#110E0F] border border-white/[0.08] flex items-center justify-center shrink-0">
-                <Disc3 className="w-5 h-5 text-[#FF443A]" />
-              </div>
+              <KiddwaveLogo size={44} className="shrink-0" />
               <div className="text-xs truncate">
                 <span className="block text-[#F4F1F1] font-semibold truncate">Ready to listen</span>
-                <span className="block text-[#6F6A6B] truncate">Choose any country or track</span>
+                <span className="block text-[#6F6A6B] truncate">Space to play · Arrows ±5s</span>
               </div>
             </div>
           )}
@@ -289,7 +285,7 @@ export const PlayerBar: React.FC<PlayerBarProps> = ({
             {formatDuration(displayTime)}
           </span>
 
-          <div className="flex items-center gap-2 sm:gap-3 bg-[#110E0F] border border-white/[0.08] rounded-2xl px-3 py-1.5">
+          <div className="frame-3d flex items-center gap-2 sm:gap-3 rounded-2xl px-3 py-1.5">
             <button
               type="button"
               onClick={onToggleShuffle}

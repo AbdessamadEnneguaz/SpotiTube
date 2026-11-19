@@ -60,7 +60,7 @@ export const RecentPage: React.FC<RecentPageProps> = ({
           <button
             type="button"
             onClick={() => onPlayTrack(tracksToShow[0], tracksToShow)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#EF2323] hover:bg-[#FF3830] text-white font-bold text-xs transition-colors cursor-pointer shrink-0 self-start sm:self-auto shadow-[0_4px_14px_rgba(239,35,35,0.3)]"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold text-xs transition-colors cursor-pointer shrink-0 self-start sm:self-auto border border-[#F87171]/40 shadow-[0_4px_14px_rgba(239,68,68,0.35)]"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Play Cached ({tracksToShow.length})</span>
@@ -69,7 +69,7 @@ export const RecentPage: React.FC<RecentPageProps> = ({
       </div>
 
       {tracksToShow.length === 0 ? (
-        <div className="rounded-2xl bg-[#110E0F] border border-white/[0.08] p-8 text-center space-y-2">
+        <div className="frame-3d rounded-2xl p-8 text-center space-y-2">
           <p className="font-display text-base font-bold text-white">No cached tracks yet</p>
           <p className="text-xs sm:text-sm text-[#A39E9F]">
             Play any track from Countries, Mixes, or Search to save it here automatically.

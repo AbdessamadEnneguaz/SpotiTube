@@ -40,16 +40,16 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row items-center md:items-end text-center md:text-left gap-5 bg-gradient-to-br from-[#230607] via-[#110E0F] to-[#0B0A0B] p-5 sm:p-6 rounded-2xl border border-white/[0.09]">
+      <div className="frame-3d-crimson flex flex-col md:flex-row items-center md:items-end text-center md:text-left gap-5 p-5 sm:p-6 rounded-2xl">
         <CoverImage
           src={playlist.coverImage}
           alt={playlist.name}
           youtubeId={playlist.tracks[0]?.youtubeId}
           loading="eager"
-          className="w-36 h-36 sm:w-44 sm:h-44 rounded-xl object-cover shadow-2xl border border-white/10 shrink-0"
+          className="w-36 h-36 sm:w-44 sm:h-44 rounded-xl object-cover shadow-2xl border border-white/14 shrink-0"
         />
         <div className="flex-1 space-y-2 min-w-0 w-full">
-          <div className="text-xs font-semibold text-[#FF443A]">
+          <div className="text-xs font-semibold text-[#EF4444]">
             {playlist.isCustom ? 'Custom Mix' : playlist.regionLabel || 'Curated Collection'}
           </div>
           <h1 className="font-display text-2xl sm:text-4xl font-extrabold text-white tracking-tight text-balance">
@@ -75,7 +75,7 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
             if (first) onPlayTrack(first, playlist.tracks);
           }}
           aria-label={`Play ${playlist.name}`}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#EF2323] hover:bg-[#FF3830] text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer shadow-[0_6px_18px_rgba(239,35,35,0.35)]"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer border border-[#F87171]/40 shadow-[0_6px_18px_rgba(239,68,68,0.38)]"
         >
           <Play className="w-4 h-4 fill-current" />
           <span>Play Collection</span>

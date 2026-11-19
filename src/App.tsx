@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { PlayerBar } from './components/PlayerBar';
 import { YouTubePlayerEmbed } from './components/YouTubePlayerEmbed';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { SplashScreen } from './components/SplashScreen';
 import { HomePage } from './pages/HomePage';
 import {
   CURATED_TRACKS,
@@ -44,11 +45,6 @@ import {
   isTrackPlayableOffline,
   filterTracksForOffline
 } from './utils/offlineMode';
-import {
-  shouldAutoPromptPermissionsOnEntry,
-  loadPermissionsPrompted,
-  getNotificationPermissionState
-} from './utils/backgroundPermission';
 import { useOnlineStatus } from './hooks/useOnlineStatus';
 import { safeParseJson, sanitizeMediaUrl, sanitizeClientText } from './utils/security';
 import { unlockAudioKeepAlive } from './utils/backgroundAudio';
@@ -59,6 +55,11 @@ import {
   popRoute,
   canGoBackFromRoute
 } from './utils/navigation';
+import {
+  resolveGlobalMediaShortcut,
+  clampSeekTime,
+  EditableTargetLike
+} from './utils/keyboardShortcuts';
 
 // Lazy-loaded pages (code-split chunks keep initial load light & fast on phones)
 const CountriesPage = lazy(() => import('./pages/CountriesPage'));
@@ -93,12 +94,21 @@ const BackgroundPermissionModal = lazy(() =>
 
 const PageLoader: React.FC = () => (
   <div className="flex items-center justify-center py-20 text-[#A39E9F] gap-3">
-    <div className="w-5 h-5 border-2 border-[#EF2323] border-t-transparent rounded-full animate-spin" />
+    <div className="w-5 h-5 border-2 border-[#EF4444] border-t-transparent rounded-full animate-spin" />
     <span className="text-xs font-medium text-[#D0CBCC]">Loading page...</span>
   </div>
 );
 
 export default function App() {
+  // Animated Splash Screen (skipped automatically if ?autostart=1)
+  const [showSplash, setShowSplash] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return !new URLSearchParams(window.location.search).has('autostart');
+  });
+  const handleSplashComplete = useCallback(() => {
+    setShowSplash(false);
+  }, []);
+
   // Multi-page Navigation & History Stack
   const [currentRoute, setCurrentRoute] = useState<RouteEntry>(INITIAL_ROUTE);
   const [navHistory, setNavHistory] = useState<RouteEntry[]>([]);
@@ -172,15 +182,7 @@ export default function App() {
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [isExpandedCoverOpen, setIsExpandedCoverOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
-  const [isBgPermissionOpen, setIsBgPermissionOpen] = useState<boolean>(() =>
-    shouldAutoPromptPermissionsOnEntry({
-      alreadyPrompted: loadPermissionsPrompted(),
-      notificationPermission: getNotificationPermissionState(),
-      isNativeAndroid:
-        typeof window !== 'undefined' &&
-        Boolean((window as unknown as { SpotiTubeAndroid?: unknown }).SpotiTubeAndroid)
-    })
-  );
+  const [isBgPermissionOpen, setIsBgPermissionOpen] = useState(false);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [legalTab, setLegalTab] = useState<'privacy' | 'terms' | 'dmca' | 'cookies'>('privacy');
@@ -608,6 +610,12 @@ export default function App() {
     [currentTrack, handlePlayTrack, cachedYoutubeIds, isOfflineMode]
   );
 
+  const handlePlayWorldRotation = useCallback(() => {
+    const playable = filterTracksForOffline(CURATED_TRACKS, cachedYoutubeIds, isOfflineMode);
+    const first = playable[0] || CURATED_TRACKS[0];
+    if (first) handlePlayTrack(first, CURATED_TRACKS);
+  }, [cachedYoutubeIds, isOfflineMode, handlePlayTrack]);
+
   const handlePlayPause = useCallback(() => {
     unlockAudioKeepAlive();
     if (!currentTrack) {
@@ -616,6 +624,8 @@ export default function App() {
         if (firstPlayable) {
           handlePlayTrack(firstPlayable);
         }
+      } else {
+        handlePlayWorldRotation();
       }
       return;
     }
@@ -624,7 +634,7 @@ export default function App() {
       return;
     }
     setIsPlaying((prev) => !prev);
-  }, [currentTrack, isPlaying, queue, cachedYoutubeIds, isOfflineMode, handlePlayTrack]);
+  }, [currentTrack, isPlaying, queue, cachedYoutubeIds, isOfflineMode, handlePlayTrack, handlePlayWorldRotation]);
 
   const handlePlayToggleTrack = useCallback(
     (track: Track, contextList: Track[]) => {
@@ -638,12 +648,6 @@ export default function App() {
     },
     [currentTrack, handlePlayPause, handlePlayTrack]
   );
-
-  const handlePlayWorldRotation = useCallback(() => {
-    const playable = filterTracksForOffline(CURATED_TRACKS, cachedYoutubeIds, isOfflineMode);
-    const first = playable[0] || CURATED_TRACKS[0];
-    if (first) handlePlayTrack(first, CURATED_TRACKS);
-  }, [cachedYoutubeIds, isOfflineMode, handlePlayTrack]);
 
   const handleNext = useCallback(() => {
     if (sleepTimerMinutes === -1) {
@@ -712,7 +716,12 @@ export default function App() {
     }
   }, [currentTime, queue, queueIndex, isShuffle, shuffledIndices, cachedYoutubeIds, isOfflineMode]);
 
+  const lastSeekAtRef = useRef<number>(0);
+
   const handleSeek = useCallback((seconds: number) => {
+    lastSeekAtRef.current = Date.now();
+    lastTimeRef.current = seconds;
+    shortcutStateRef.current.currentTime = seconds;
     setSeekTarget(seconds);
     setCurrentTime(seconds);
   }, []);
@@ -841,6 +850,12 @@ export default function App() {
   const lastTimeRef = useRef(0);
   const handleTimeUpdate = useCallback(
     (curr: number, dur: number) => {
+      if (Date.now() - lastSeekAtRef.current < 750) {
+        if (dur > 0 && Math.abs(duration - dur) > 2) {
+          setDuration(dur);
+        }
+        return;
+      }
       if (
         Math.abs(curr - lastTimeRef.current) >= 0.18 ||
         Math.abs(curr - lastTimeRef.current) > 1.5
@@ -857,10 +872,66 @@ export default function App() {
 
   const featuredHomeTracks = useMemo(() => CURATED_TRACKS.slice(0, 4), []);
 
+  // Latest playback refs for zero-churn global desktop keyboard shortcuts
+  const shortcutStateRef = useRef({
+    currentTrack,
+    currentTime,
+    duration,
+    handlePlayPause,
+    handleSeek
+  });
+  shortcutStateRef.current = {
+    currentTrack,
+    currentTime,
+    duration,
+    handlePlayPause,
+    handleSeek
+  };
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const action = resolveGlobalMediaShortcut(
+        {
+          key: e.key,
+          code: e.code,
+          repeat: e.repeat,
+          ctrlKey: e.ctrlKey,
+          metaKey: e.metaKey,
+          altKey: e.altKey,
+          shiftKey: e.shiftKey
+        },
+        e.target as EditableTargetLike | null
+      );
+      if (!action) return;
+
+      const state = shortcutStateRef.current;
+      if (action.type === 'toggle-play') {
+        e.preventDefault();
+        state.handlePlayPause();
+        return;
+      }
+
+      if (action.type === 'seek-delta' && state.currentTrack) {
+        e.preventDefault();
+        const nextSec = clampSeekTime(
+          state.currentTime,
+          action.deltaSeconds,
+          state.duration || state.currentTrack.durationSeconds || 0
+        );
+        state.handleSeek(nextSec);
+      }
+    };
+
+    window.addEventListener('keydown', handleGlobalKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown, { capture: true });
+  }, []);
+
   return (
     <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#070607] text-[#F4F1F1] font-sans antialiased">
+      {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
+
       {/* Application Workspace */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Minimal Left Navigation Rail */}
         <Sidebar
           currentView={currentView}
@@ -877,7 +948,7 @@ export default function App() {
         />
 
         {/* Central Content Viewport */}
-        <div className="flex-1 flex flex-col bg-[#070607] overflow-hidden relative">
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-[#070607] overflow-hidden relative">
           <Header
             currentView={currentView}
             canGoBack={canGoBack}
@@ -906,9 +977,9 @@ export default function App() {
 
           <main
             ref={mainContentRef}
-            className="flex-1 overflow-y-auto px-3 sm:px-5 md:px-7 py-4 sm:py-6 scrollbar-thin"
+            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 md:px-7 py-4 sm:py-6 pb-6 scrollbar-thin"
           >
-            <div key={viewKey} className="animate-view-fade-slide w-full max-w-7xl mx-auto min-h-full">
+            <div key={viewKey} className="animate-view-fade-slide w-full max-w-7xl mx-auto">
               {currentView === 'home' && (
                 <HomePage
                   featuredTracks={featuredHomeTracks}

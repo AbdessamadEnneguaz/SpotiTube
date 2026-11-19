@@ -27,13 +27,13 @@ export const TrackCard: React.FC<TrackCardProps> = React.memo(({
   return (
     <div
       onClick={() => onInspect(track)}
-      className={`card-interactive group bg-[#110E0F] hover:bg-[#171213] p-3 rounded-2xl border transition-colors flex flex-col relative ${
+      className={`frame-3d card-interactive group p-3 rounded-2xl flex flex-col relative ${
         isOfflineDisabled
-          ? 'opacity-45 cursor-not-allowed border-white/[0.04]'
-          : 'cursor-pointer border-white/[0.08] hover:border-[#EF2323]/45'
-      } ${isCurrent && isPlaying ? 'border-[#EF2323]/60 bg-[#171213]' : ''}`}
+          ? 'opacity-45 cursor-not-allowed'
+          : 'cursor-pointer'
+      } ${isCurrent && isPlaying ? 'border-[#EF4444]/65 shadow-[0_0_24px_-6px_rgba(239,68,68,0.3)]' : ''}`}
     >
-      <div className="relative mb-3 aspect-video sm:aspect-[4/3] rounded-xl overflow-hidden bg-[#070607]">
+      <div className="relative mb-3 aspect-video sm:aspect-[4/3] rounded-xl overflow-hidden bg-[#070607] border border-white/[0.08] shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
         <CoverImage
           src={track.thumbnail}
           alt={track.title}
@@ -56,10 +56,10 @@ export const TrackCard: React.FC<TrackCardProps> = React.memo(({
                 onPlayToggle(track);
               }}
               aria-label={`Play ${track.title}`}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all cursor-pointer shrink-0 border ${
                 isCurrent
-                  ? 'bg-[#EF2323] text-white shadow-[0_4px_12px_rgba(239,35,35,0.45)]'
-                  : 'bg-black/75 text-white hover:bg-[#EF2323] hover:text-white'
+                  ? 'bg-[#EF4444] border-[#F87171]/50 text-white shadow-[0_4px_14px_rgba(239,68,68,0.45)]'
+                  : 'bg-black/75 border-white/15 text-white hover:bg-[#EF4444] hover:border-[#F87171]/50'
               }`}
             >
               {isCurrent && isPlaying ? (
@@ -71,7 +71,7 @@ export const TrackCard: React.FC<TrackCardProps> = React.memo(({
           )}
         </div>
       </div>
-      <div className={`font-semibold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#FF443A]' : 'text-[#F4F1F1]'}`}>
+      <div className={`font-semibold text-xs sm:text-sm truncate ${isCurrent ? 'text-[#EF4444]' : 'text-[#F4F1F1]'}`}>
         {track.title}
       </div>
       <div className="text-[11px] sm:text-xs text-[#A39E9F] truncate mt-0.5 tabular-nums">

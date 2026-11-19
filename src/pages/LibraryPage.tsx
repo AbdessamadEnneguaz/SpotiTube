@@ -37,19 +37,19 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
         <div
           onClick={() => onOpenPlaylist('liked')}
-          className="card-interactive p-5 rounded-2xl bg-gradient-to-br from-[#2B0809] via-[#150B0C] to-[#110E0F] hover:from-[#360A0B] border border-[#EF2323]/40 cursor-pointer flex items-center gap-4"
+          className="frame-3d-crimson card-interactive p-5 rounded-2xl cursor-pointer flex items-center gap-4"
         >
-          <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0">
+          <div className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 border border-white/12">
             <CoverImage
               src={DEFAULT_FAVORITES_COVER}
               alt="Saved Favorites"
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-black/45 flex items-center justify-center">
-              <Heart className="w-7 h-7 fill-[#EF2323] text-[#EF2323]" />
+              <Heart className="w-7 h-7 fill-[#EF4444] text-[#EF4444]" />
             </div>
           </div>
           <div className="min-w-0 flex-1">
@@ -59,7 +59,7 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
             <p className="text-xs text-[#A39E9F] mt-1 tabular-nums">
               {likedCount} tracks saved locally
             </p>
-            <span className="text-xs font-semibold text-[#FF443A] mt-2 inline-block">
+            <span className="text-xs font-semibold text-[#EF4444] mt-2 inline-block">
               Open collection
             </span>
           </div>
@@ -67,9 +67,9 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
 
         <div
           onClick={onOpenRecent}
-          className="card-interactive p-5 rounded-2xl bg-[#110E0F] hover:bg-[#171213] border border-white/[0.08] hover:border-[#EF2323]/45 cursor-pointer flex items-center gap-4"
+          className="frame-3d card-interactive p-5 rounded-2xl cursor-pointer flex items-center gap-4"
         >
-          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-[#EF2323]/12 border border-[#EF2323]/30 flex items-center justify-center shrink-0 text-[#FF443A]">
+          <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl bg-[#EF4444]/12 border border-[#EF4444]/30 flex items-center justify-center shrink-0 text-[#EF4444]">
             <History className="w-8 h-8" />
           </div>
           <div className="min-w-0 flex-1">
@@ -79,7 +79,7 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
             <p className="text-xs text-[#A39E9F] mt-1 tabular-nums">
               {cachedCount} tracks ready offline
             </p>
-            <span className="text-xs font-semibold text-[#FF443A] mt-2 inline-block">
+            <span className="text-xs font-semibold text-[#EF4444] mt-2 inline-block">
               Open history
             </span>
           </div>
@@ -89,14 +89,14 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
           <div
             key={pl.id}
             onClick={() => onOpenPlaylist(pl.id)}
-            className="card-interactive p-3.5 sm:p-4 rounded-2xl bg-[#110E0F] hover:bg-[#171213] cursor-pointer border border-white/[0.08] hover:border-[#EF2323]/40 flex items-center gap-3.5"
+            className="frame-3d card-interactive p-3.5 sm:p-4 rounded-2xl cursor-pointer flex items-center gap-3.5"
           >
             <CoverImage
               src={pl.coverImage}
               alt={pl.name}
               youtubeId={pl.tracks[0]?.youtubeId}
               loading="lazy"
-              className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-[#070607]"
+              className="w-16 h-16 sm:w-24 sm:h-24 rounded-xl object-cover shrink-0 bg-[#070607] border border-white/10"
             />
             <div className="flex-1 min-w-0">
               <h3 className="font-display text-sm sm:text-base font-bold text-white truncate">
@@ -105,7 +105,7 @@ export const LibraryPage: React.FC<LibraryPageProps> = ({
               <p className="text-xs text-[#A39E9F] line-clamp-2 mt-1">
                 {pl.description}
               </p>
-              <span className="text-xs text-[#FF443A] mt-2 block font-medium tabular-nums">
+              <span className="text-xs text-[#EF4444] mt-2 block font-medium tabular-nums">
                 {pl.isCustom ? 'Custom · ' : pl.regionLabel ? `${pl.regionLabel} · ` : ''}
                 {pl.tracks.length} tracks
               </span>

@@ -71,7 +71,7 @@ export const ChartsPage: React.FC<ChartsPageProps> = ({
       </div>
 
       {/* Region Selector Tabs inside Charts Page */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
         {REGIONS.map((region) => {
           const isActive = selectedRegion === region.id;
           return (
@@ -79,10 +79,10 @@ export const ChartsPage: React.FC<ChartsPageProps> = ({
               type="button"
               key={region.id}
               onClick={() => onSelectRegion(region.id)}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer border ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap shrink-0 transition-all cursor-pointer border ${
                 isActive
-                  ? 'bg-[#EF2323] text-white border-[#EF2323] font-bold shadow-[0_4px_12px_rgba(239,35,35,0.3)]'
-                  : 'bg-[#110E0F] text-[#D0CBCC] border-white/[0.08] hover:bg-[#171213] hover:text-white'
+                  ? 'bg-[#EF4444] text-white border-[#F87171]/50 font-bold shadow-[0_6px_16px_rgba(239,68,68,0.35)]'
+                  : 'frame-3d text-[#D0CBCC] hover:text-white hover:border-[#EF4444]/40'
               }`}
             >
               {region.label}

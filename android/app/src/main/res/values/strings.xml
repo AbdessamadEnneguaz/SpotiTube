@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">Kiddwave</string>
+    <string name="app_url">https://kiddwave.netlify.app/</string>
 </resources>

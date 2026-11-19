@@ -1,7 +1,8 @@
 import React from 'react';
-import { Home, Search, Library, Plus, Heart, Disc3, ChevronRight } from 'lucide-react';
+import { Home, Search, Library, Plus, Heart, ChevronRight } from 'lucide-react';
 import { AppView, Playlist } from '../types/music';
 import { CoverImage } from './CoverImage';
+import { KiddwaveLogo } from './KiddwaveLogo';
 import { DEFAULT_FAVORITES_COVER } from '../data/curatedTracks';
 
 interface SidebarProps {
@@ -33,7 +34,7 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
     currentView === 'recent';
 
   return (
-    <aside className="hidden md:flex w-60 bg-[#0B0A0B] border-r border-white/[0.08] flex-col h-full shrink-0 text-[#A39E9F] text-sm">
+    <aside className="hidden md:flex w-60 bg-gradient-to-b from-[#0E0B0C] to-[#080708] border-r border-white/[0.08] flex-col h-full shrink-0 text-[#A39E9F] text-sm shadow-[inset_-1px_0_0_rgba(255,255,255,0.03)]">
       {/* Brand Header */}
       <div className="px-5 pt-5 pb-4 border-b border-white/[0.07]">
         <button
@@ -41,54 +42,55 @@ export const Sidebar: React.FC<SidebarProps> = React.memo(({
           onClick={() => onNavigate('home')}
           className="flex items-center gap-3 text-left group cursor-pointer"
         >
-          <div className="w-9 h-9 rounded-xl bg-[#EF2323] text-white flex items-center justify-center shadow-[0_6px_20px_rgba(239,35,35,0.35)] shrink-0">
-            <Disc3 className="w-5 h-5" />
-          </div>
+          <KiddwaveLogo
+            size={38}
+            className="shrink-0 drop-shadow-[0_6px_16px_rgba(239,68,68,0.38)] transition-transform duration-200 group-hover:scale-105"
+          />
           <span className="font-display font-extrabold text-xl tracking-tight text-white whitespace-nowrap shrink-0">
-            Kidd<span className="text-[#EF2323]">wave</span>
+            Kidd<span className="text-[#EF4444]">wave</span>
           </span>
         </button>
       </div>
 
       {/* Minimal 3-Item Primary Menu */}
       <div className="px-3 pt-4 pb-3">
-        <nav className="flex flex-col gap-1" aria-label="Main Navigation">
+        <nav className="flex flex-col gap-1.5" aria-label="Main Navigation">
           <button
             type="button"
             onClick={() => onNavigate('home')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer whitespace-nowrap border ${
               isHomeSection && !selectedPlaylistId
-                ? 'bg-[#EF2323]/14 text-white border border-[#EF2323]/40 font-semibold'
-                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border border-transparent'
+                ? 'frame-3d-crimson text-white font-semibold'
+                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border-transparent'
             }`}
           >
-            <Home className={`w-4 h-4 shrink-0 ${isHomeSection && !selectedPlaylistId ? 'text-[#FF443A]' : ''}`} />
+            <Home className={`w-4 h-4 shrink-0 ${isHomeSection && !selectedPlaylistId ? 'text-[#EF4444]' : ''}`} />
             <span>Home</span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigate('search')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer whitespace-nowrap border ${
               currentView === 'search'
-                ? 'bg-[#EF2323]/14 text-white border border-[#EF2323]/40 font-semibold'
-                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border border-transparent'
+                ? 'frame-3d-crimson text-white font-semibold'
+                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border-transparent'
             }`}
           >
-            <Search className={`w-4 h-4 shrink-0 ${currentView === 'search' ? 'text-[#FF443A]' : ''}`} />
+            <Search className={`w-4 h-4 shrink-0 ${currentView === 'search' ? 'text-[#EF4444]' : ''}`} />
             <span>Search</span>
           </button>
 
           <button
             type="button"
             onClick={() => onNavigate('library')}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors text-left cursor-pointer whitespace-nowrap ${
+            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left cursor-pointer whitespace-nowrap border ${
               currentView === 'library'
-                ? 'bg-[#EF2323]/14 text-white border border-[#EF2323]/40 font-semibold'
-                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border border-transparent'
+                ? 'frame-3d-crimson text-white font-semibold'
+                : 'text-[#D0CBCC] hover:text-white hover:bg-white/[0.05] border-transparent'
             }`}
           >
-            <Library className={`w-4 h-4 shrink-0 ${currentView === 'library' ? 'text-[#FF443A]' : ''}`} />
+            <Library className={`w-4 h-4 shrink-0 ${currentView === 'library' ? 'text-[#EF4444]' : ''}`} />
             <span>Library</span>
           </button>
         </nav>

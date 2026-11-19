@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer soft crimson ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#3FEF4444"
+        android:strokeWidth="1.8"
+        android:pathData="M54,23A31,31 0 1,1 53.99,23Z" />
+    <!-- Primary red vinyl/wave ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#EF4444"
+        android:strokeWidth="2.8"
+        android:pathData="M54,28A26,26 0 1,1 53.99,28Z" />
+    <!-- Soundwave Bar 1 -->
+    <path
+        android:fillColor="#DC2626"
+        android:pathData="M41.5,48.5a2.4,2.4 0 0,1 4.8,0v11a2.4,2.4 0 0,1 -4.8,0z" />
+    <!-- Soundwave Bar 2 (Peak white accent) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49.5,39a2.4,2.4 0 0,1 4.8,0v30a2.4,2.4 0 0,1 -4.8,0z" />
+    <!-- Soundwave Bar 3 -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M57.5,44a2.4,2.4 0 0,1 4.8,0v20a2.4,2.4 0 0,1 -4.8,0z" />
+    <!-- Soundwave Bar 4 -->
+    <path
+        android:fillColor="#F87171"
+        android:pathData="M65.5,50a2.4,2.4 0 0,1 4.8,0v8a2.4,2.4 0 0,1 -4.8,0z" />
+    <!-- Top Accent Dot -->
+    <path
+        android:fillColor="#EF4444"
+        android:pathData="M51.9,31.5a2,2 0 1,1 0,4a2,2 0 1,1 0,-4z" />
+</vector>
