@@ -19,10 +19,18 @@ from api._security import (
     SafeTTLCache,
     evaluate_cors,
     extract_client_ip,
+    is_blocked_user_agent,
     is_rate_limited,
+    is_upstream_rate_limit_error,
     is_valid_video_id,
     safe_https_thumbnail,
     validate_search_query,
+    verify_request_signature,
+)
+from api.search import (
+    SEARCH_CACHE_CONTROL,
+    search_with_invidious,
+    search_with_piped,
 )
 
 app = Flask(__name__, static_folder="static", template_folder="static")
@@ -86,6 +94,9 @@ def index():
 
 @app.route('/api/search', methods=['GET'])
 def search():
+    if is_blocked_user_agent(request.headers.get("User-Agent")):
+        return jsonify({"error": "Automated requests are not permitted."}), 403
+
     if "url" in request.args:
         return jsonify({"error": "Arbitrary URL parameters are not permitted."}), 400
 
@@ -99,14 +110,19 @@ def search():
     if len(raw_q) > 200:
         return jsonify({"error": "Query exceeds maximum length."}), 400
 
+    if not verify_request_signature(request.headers, request.args, "/api/search", raw_q.strip()):
+        return jsonify({"error": "Invalid or expired request signature."}), 403
+
     query = validate_search_query(raw_q)
-    if not query or yt_dlp is None:
+    if not query:
         return jsonify([])
 
     cache_key = query.lower()
     cached = _LOCAL_CACHE.get(cache_key)
     if cached is not None:
-        return jsonify(cached)
+        resp = make_response(jsonify(cached), 200)
+        resp.headers["Cache-Control"] = SEARCH_CACHE_CONTROL
+        return resp
 
     if not EXTRACTION_SEMAPHORE.acquire(timeout=2.0):
         return jsonify({"error": "Search service busy."}), 503
@@ -124,41 +140,78 @@ def search():
     }
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(f"ytsearch15:{query}", download=False)
-            results = []
-            seen = set()
-            entries = info.get('entries', []) if info else []
-            for entry in entries:
-                if not entry:
-                    continue
-                video_id = str(entry.get('id') or '')
-                if not is_valid_video_id(video_id) and entry.get('url'):
-                    m = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})", str(entry.get('url')))
-                    if m:
-                        video_id = m.group(1)
-                if not is_valid_video_id(video_id) or video_id in seen:
-                    continue
-                seen.add(video_id)
+        results = []
+        saw_rate_limit = False
+        if yt_dlp is not None:
+            try:
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(f"ytsearch15:{query}", download=False)
+                    seen = set()
+                    entries = info.get('entries', []) if info else []
+                    for entry in entries:
+                        if not entry:
+                            continue
+                        video_id = str(entry.get('id') or '')
+                        if not is_valid_video_id(video_id) and entry.get('url'):
+                            m = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})", str(entry.get('url')))
+                            if m:
+                                video_id = m.group(1)
+                        if not is_valid_video_id(video_id) or video_id in seen:
+                            continue
+                        seen.add(video_id)
 
-                title = str(entry.get('title') or 'Unknown Title')[:160]
-                channel = str(entry.get('uploader') or entry.get('channel') or 'YouTube Artist')[:100]
-                dur_sec, dur_fmt = format_duration(entry.get('duration'))
+                        title = str(entry.get('title') or 'Unknown Title')[:160]
+                        channel = str(entry.get('uploader') or entry.get('channel') or 'YouTube Artist')[:100]
+                        dur_sec, dur_fmt = format_duration(entry.get('duration'))
 
-                results.append({
-                    "id": video_id,
-                    "youtubeId": video_id,
-                    "title": title,
-                    "channel": channel,
-                    "artist": channel,
-                    "thumbnail": safe_https_thumbnail(entry.get('thumbnail'), video_id),
-                    "durationSeconds": dur_sec,
-                    "durationFormatted": dur_fmt,
-                })
+                        results.append({
+                            "id": video_id,
+                            "youtubeId": video_id,
+                            "title": title,
+                            "channel": channel,
+                            "artist": channel,
+                            "thumbnail": safe_https_thumbnail(entry.get('thumbnail'), video_id),
+                            "durationSeconds": dur_sec,
+                            "durationFormatted": dur_fmt,
+                        })
+            except Exception as exc:
+                if is_upstream_rate_limit_error(exc):
+                    saw_rate_limit = True
+                results = []
 
-            if results:
-                _LOCAL_CACHE.set(cache_key, results)
-            return jsonify(results)
+        if not results:
+            try:
+                results = search_with_piped(query)
+            except Exception as exc:
+                if is_upstream_rate_limit_error(exc):
+                    saw_rate_limit = True
+                results = []
+
+        if not results:
+            try:
+                results = search_with_invidious(query)
+            except Exception as exc:
+                if is_upstream_rate_limit_error(exc):
+                    saw_rate_limit = True
+                results = []
+
+        if not results and saw_rate_limit:
+            resp = make_response(
+                jsonify({
+                    "error": "Search providers are temporarily busy. Please try again in a few moments.",
+                    "rateLimited": True,
+                }),
+                503,
+            )
+            resp.headers["Retry-After"] = "15"
+            resp.headers["Cache-Control"] = "no-store"
+            return resp
+
+        if results:
+            _LOCAL_CACHE.set(cache_key, results)
+        resp = make_response(jsonify(results), 200)
+        resp.headers["Cache-Control"] = SEARCH_CACHE_CONTROL if results else "no-store"
+        return resp
     except Exception:
         return jsonify({"error": "Search request failed."}), 500
     finally:

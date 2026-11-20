@@ -1,4 +1,6 @@
 from collections import OrderedDict, deque
+import hashlib
+import hmac
 import re
 import threading
 import time
@@ -99,6 +101,7 @@ def evaluate_cors(origin: str | None, host: str | None = None) -> tuple[bool, di
     - Blocks all unauthorized external cross-site origins with 403 and emits zero wildcard '*'
     """
     base_headers = {"Vary": "Origin"}
+    allow_headers = "Content-Type, Range, X-KW-Timestamp, X-KW-Signature"
     clean_origin = (origin or "").strip()
     if not clean_origin:
         return True, base_headers
@@ -108,7 +111,7 @@ def evaluate_cors(origin: str | None, host: str | None = None) -> tuple[bool, di
             **base_headers,
             "Access-Control-Allow-Origin": clean_origin,
             "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-            "Access-Control-Allow-Headers": "Content-Type, Range",
+            "Access-Control-Allow-Headers": allow_headers,
             "Access-Control-Max-Age": "600",
         }
 
@@ -123,11 +126,102 @@ def evaluate_cors(origin: str | None, host: str | None = None) -> tuple[bool, di
                 **base_headers,
                 "Access-Control-Allow-Origin": clean_origin,
                 "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type, Range",
+                "Access-Control-Allow-Headers": allow_headers,
                 "Access-Control-Max-Age": "600",
             }
 
     return False, base_headers
+
+
+# Anti-bot / anti-scraping User-Agent blocklist
+BLOCKED_USER_AGENT_TOKENS = (
+    "curl/",
+    "python-requests",
+    "scrapy",
+    "wget",
+    "httpie",
+    "go-http-client",
+    "libwww-perl",
+    "python-urllib",
+    "aiohttp/",
+)
+
+REQUEST_SIGNATURE_WINDOW_SECONDS = 120
+_CLIENT_TAG_BYTES = b"kw-v1-a8f4c291e5b07d33"
+_HEX64_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+_DIGITS_RE = re.compile(r"^\d{9,12}$")
+
+
+def is_blocked_user_agent(user_agent: str | None) -> bool:
+    """Blocks empty or known automated CLI/scraper User-Agents with HTTP 403."""
+    if not isinstance(user_agent, str) or not user_agent.strip():
+        return True
+    ua_lower = user_agent.strip().lower()
+    return any(token in ua_lower for token in BLOCKED_USER_AGENT_TOKENS)
+
+
+def _get_header_ci(headers, name: str) -> str | None:
+    if headers is None:
+        return None
+    val = headers.get(name) if hasattr(headers, "get") else None
+    if val is not None:
+        return str(val)
+    target = name.lower()
+    if hasattr(headers, "items"):
+        for k, v in headers.items():
+            if str(k).lower() == target:
+                return str(v)
+    return None
+
+
+def compute_request_signature(timestamp_str: str | int, path: str, param_value: str) -> str:
+    payload = f"{str(timestamp_str).strip()}:{path.strip()}:{param_value.strip()}"
+    return hmac.new(_CLIENT_TAG_BYTES, payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def verify_request_signature(
+    headers,
+    params,
+    path: str,
+    param_value: str,
+    *,
+    allow_query_params: bool = False,
+    now_unix: float | None = None,
+) -> bool:
+    """
+    Verifies rotating HMAC-SHA256 signature within a ±120s time window.
+    Accepts X-KW-Timestamp / X-KW-Signature headers, and optionally ts / sig
+    query parameters for native HTML <audio src> media streaming requests.
+    """
+    ts_raw = _get_header_ci(headers, "x-kw-timestamp")
+    sig_raw = _get_header_ci(headers, "x-kw-signature")
+
+    if (not ts_raw or not sig_raw) and allow_query_params and params:
+        raw_ts_param = params.get("ts")
+        raw_sig_param = params.get("sig")
+        if isinstance(raw_ts_param, list):
+            ts_raw = raw_ts_param[0] if raw_ts_param else None
+        elif isinstance(raw_ts_param, str):
+            ts_raw = raw_ts_param
+        if isinstance(raw_sig_param, list):
+            sig_raw = raw_sig_param[0] if raw_sig_param else None
+        elif isinstance(raw_sig_param, str):
+            sig_raw = raw_sig_param
+
+    if not ts_raw or not sig_raw:
+        return False
+
+    ts_clean = str(ts_raw).strip()
+    sig_clean = str(sig_raw).strip()
+    if not _DIGITS_RE.match(ts_clean) or not _HEX64_RE.match(sig_clean):
+        return False
+
+    now_val = time.time() if now_unix is None else float(now_unix)
+    if abs(now_val - int(ts_clean)) > REQUEST_SIGNATURE_WINDOW_SECONDS:
+        return False
+
+    expected = compute_request_signature(ts_clean, path, param_value)
+    return hmac.compare_digest(expected, sig_clean.lower())
 
 
 def is_valid_video_id(vid: str | None) -> bool:
@@ -215,6 +309,91 @@ def is_safe_googlevideo_url(url: str | None) -> bool:
         return False
     host = (parsed.hostname or "").lower()
     return bool(GOOGLESAFETY_HOST_RE.match(host))
+
+
+ALLOWED_MIRROR_AUDIO_HOSTS = frozenset(
+    {
+        "pipedapi.kavin.rocks",
+        "pipedapi.adminforge.de",
+        "api.piped.private.coffee",
+        "inv.nadeko.net",
+        "invidious.nerdvpn.de",
+        "yewtu.be",
+    }
+)
+PIPED_PROXY_HOST_RE = re.compile(r"^[a-z0-9-]+proxy[a-z0-9-]*\.[a-z0-9.-]+$")
+
+
+def is_safe_upstream_audio_url(url: str | None) -> bool:
+    """
+    Validates HTTPS stream URLs from either googlevideo.com or explicit
+    allowlisted Piped/Invidious mirror proxy hosts (SSRF defense).
+    """
+    if is_safe_googlevideo_url(url):
+        return True
+    if not isinstance(url, str) or not url.startswith("https://") or len(url) > 2048:
+        return False
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme != "https" or parsed.username or parsed.password:
+        return False
+    if parsed.port not in (None, 443):
+        return False
+    host = (parsed.hostname or "").lower()
+    if host in ALLOWED_MIRROR_AUDIO_HOSTS:
+        return True
+    return bool(
+        PIPED_PROXY_HOST_RE.match(host)
+        and host.endswith((".kavin.rocks", ".adminforge.de", ".private.coffee"))
+    )
+
+
+class UpstreamRateLimitError(Exception):
+    """Raised when an upstream provider rejects requests with HTTP 429 or 403."""
+
+
+_cooldown_lock = threading.Lock()
+_youtube_cooldown_until = 0.0
+
+
+def is_upstream_rate_limit_error(exc: Exception) -> bool:
+    code = getattr(exc, "code", None) or getattr(exc, "status", None)
+    if code in (403, 429):
+        return True
+    msg = str(exc).lower()
+    return any(
+        token in msg
+        for token in (
+            "429",
+            "too many requests",
+            "http error 403",
+            "status=403",
+            "sign in to confirm",
+            "rate limit",
+            "quota",
+        )
+    )
+
+
+def is_youtube_cooled_down(now_mono: float | None = None) -> bool:
+    now_val = time.monotonic() if now_mono is None else float(now_mono)
+    with _cooldown_lock:
+        return now_val < _youtube_cooldown_until
+
+
+def mark_youtube_cooldown(seconds: float = 60.0, now_mono: float | None = None) -> None:
+    global _youtube_cooldown_until
+    now_val = time.monotonic() if now_mono is None else float(now_mono)
+    with _cooldown_lock:
+        _youtube_cooldown_until = max(_youtube_cooldown_until, now_val + max(1.0, float(seconds)))
+
+
+def reset_youtube_cooldown() -> None:
+    global _youtube_cooldown_until
+    with _cooldown_lock:
+        _youtube_cooldown_until = 0.0
 
 
 class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):

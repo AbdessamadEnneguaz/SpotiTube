@@ -6,15 +6,20 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { resolveApkDownloadConfig } from './src/utils/apkDownload.js';
 import {
+  isBlockedUserAgent,
+  isSafeUpstreamAudioUrl,
+  verifyServerRequestSignature,
+} from './lib/requestGuard.js';
+import {
   isSearchRateLimited,
   sanitizeSearchQuery,
-  searchYouTubeTracks
+  searchYouTubeTracksWithStatus
 } from './lib/youtubeSearch.js';
 import {
   AUDIO_CHUNK_BYTES,
-  isSafeGoogleVideoUrl,
   isValidAudioVideoId,
-  resolveAudioStream,
+  markYoutubeAudioCooldown,
+  resolveAudioStreamWithStatus,
   clampByteRange,
   invalidateAudioStreamCache
 } from './lib/youtubeAudio.js';
@@ -111,7 +116,7 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     }
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, X-KW-Timestamp, X-KW-Signature');
     res.setHeader('Vary', 'Origin');
   }
   if (req.method === 'OPTIONS') {
@@ -125,6 +130,10 @@ app.use('/api', (req: Request, res: Response, next: NextFunction) => {
 
 // Live YouTube Search API endpoint (Keyless multi-layer extraction, compliant playback via IFrame API)
 app.get('/api/search', async (req: Request, res: Response) => {
+  if (isBlockedUserAgent(req.headers['user-agent'])) {
+    return res.status(403).json({ error: 'Automated requests are not permitted.' });
+  }
+
   const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
   if (isSearchRateLimited(clientIp)) {
     res.setHeader('Retry-After', '60');
@@ -140,19 +149,45 @@ app.get('/api/search', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid query parameter.' });
   }
   const rawQuery = typeof req.query.q === 'string' ? req.query.q : '';
+  if (rawQuery.length > 200) {
+    return res.status(400).json({ error: 'Query exceeds maximum length.' });
+  }
+
+  if (
+    !verifyServerRequestSignature({
+      headers: req.headers,
+      query: req.query as Record<string, unknown>,
+      path: '/api/search',
+      paramValue: rawQuery.trim(),
+      allowQueryParams: false,
+    })
+  ) {
+    return res.status(403).json({ error: 'Invalid or expired request signature.' });
+  }
+
   const query = sanitizeSearchQuery(rawQuery);
   if (!query) {
     return res.json([]);
   }
 
   try {
-    const results = await searchYouTubeTracks(query);
-    if (results.length > 0) {
-      res.setHeader('Cache-Control', 'public, max-age=120');
+    const { items: results, rateLimited } = await searchYouTubeTracksWithStatus(query);
+    if (results.length === 0 && rateLimited) {
+      res.setHeader('Retry-After', '15');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(503).json({
+        error: 'Search providers are temporarily busy. Please try again in a few moments.',
+        rateLimited: true,
+      });
     }
+    res.setHeader(
+      'Cache-Control',
+      results.length > 0 ? 'public, s-maxage=900, stale-while-revalidate=300' : 'no-store'
+    );
     return res.json(results);
   } catch {
-    return res.status(500).json([]);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
@@ -231,6 +266,10 @@ app.get('/api/artist', async (req: Request, res: Response) => {
 
 // Background Audio Stream API (probe & bounded HTTP 206 Range chunks for mobile background playback)
 app.get('/api/audio', async (req: Request, res: Response) => {
+  if (isBlockedUserAgent(req.headers['user-agent'])) {
+    return res.status(403).json({ error: 'Automated requests are not permitted.' });
+  }
+
   const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
   if (isSearchRateLimited(clientIp)) {
     res.setHeader('Retry-After', '60');
@@ -244,22 +283,50 @@ app.get('/api/audio', async (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Invalid video ID parameter.' });
   }
   const videoId = typeof req.query.v === 'string' ? req.query.v : (typeof req.query.id === 'string' ? req.query.id : '');
+  if (
+    !verifyServerRequestSignature({
+      headers: req.headers,
+      query: req.query as Record<string, unknown>,
+      path: '/api/audio',
+      paramValue: videoId.trim(),
+      allowQueryParams: true,
+    })
+  ) {
+    return res.status(403).json({ error: 'Invalid or expired request signature.' });
+  }
+
   const isProbe = req.query.probe === '1';
 
   if (!isValidAudioVideoId(videoId)) {
     return res.status(400).json({ error: 'Invalid video ID.' });
   }
 
-  const stream = await resolveAudioStream(videoId);
+  const { stream, rateLimited } = await resolveAudioStreamWithStatus(videoId);
   if (isProbe) {
     res.setHeader('Cache-Control', 'no-store');
+    if (!stream && rateLimited) {
+      res.setHeader('Retry-After', '15');
+      return res.status(503).json({
+        available: false,
+        mimeType: null,
+        rateLimited: true,
+        error: 'Audio providers are temporarily busy. Please try again in a few moments.',
+      });
+    }
     return res.json({
       available: Boolean(stream),
       mimeType: stream?.mimeType || null
     });
   }
 
-  if (!stream || !isSafeGoogleVideoUrl(stream.url)) {
+  if (!stream || !isSafeUpstreamAudioUrl(stream.url)) {
+    if (rateLimited) {
+      res.setHeader('Retry-After', '15');
+      return res.status(503).json({
+        error: 'Audio providers are temporarily busy. Please try again in a few moments.',
+        rateLimited: true,
+      });
+    }
     return res.status(404).json({ error: 'Audio stream unavailable.' });
   }
 
@@ -272,6 +339,16 @@ app.get('/api/audio', async (req: Request, res: Response) => {
       redirect: 'error',
       signal: AbortSignal.timeout(7000)
     });
+
+    if (upstream.status === 429 || upstream.status === 403) {
+      invalidateAudioStreamCache(videoId);
+      markYoutubeAudioCooldown();
+      res.setHeader('Retry-After', '15');
+      return res.status(503).json({
+        error: 'Audio providers are temporarily busy. Please try again in a few moments.',
+        rateLimited: true,
+      });
+    }
 
     if (!upstream.ok && upstream.status !== 206) {
       invalidateAudioStreamCache(videoId);

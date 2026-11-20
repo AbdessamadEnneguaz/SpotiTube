@@ -1,5 +1,6 @@
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs, quote
+import urllib.error
 import urllib.request
 import json
 import re
@@ -12,18 +13,36 @@ except ImportError:
 from api._security import (
     EXTRACTION_SEMAPHORE,
     SafeTTLCache,
+    UpstreamRateLimitError,
     evaluate_cors,
     extract_client_ip,
+    is_blocked_user_agent,
     is_rate_limited,
+    is_upstream_rate_limit_error,
     is_valid_video_id,
+    is_youtube_cooled_down,
+    mark_youtube_cooldown,
     safe_https_thumbnail,
     safe_urlopen,
-    sanitize_query,
     validate_search_query,
+    verify_request_signature,
 )
 
 # 20-minute bounded TTL cache for repeated searches
 _RESULT_CACHE = SafeTTLCache(maxsize=150, ttl=1200)
+SEARCH_CACHE_CONTROL = "public, s-maxage=900, stale-while-revalidate=300"
+
+PIPED_MIRRORS = (
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.adminforge.de",
+    "https://api.piped.private.coffee",
+)
+
+INVIDIOUS_MIRRORS = (
+    "https://inv.nadeko.net",
+    "https://invidious.nerdvpn.de",
+    "https://yewtu.be",
+)
 
 
 def format_duration(seconds_val):
@@ -53,7 +72,7 @@ def search_with_ytdlp(query: str) -> list:
         "skip_download": True,
         "quiet": True,
         "no_warnings": True,
-        "ignoreerrors": True,
+        "ignoreerrors": False,
         "noplaylist": True,
         "socket_timeout": 6,
         "default_search": "ytsearch15",
@@ -62,41 +81,46 @@ def search_with_ytdlp(query: str) -> list:
 
     results = []
     seen = set()
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(f"ytsearch15:{safe_q}", download=False)
-        entries = info.get("entries", []) if info else []
-        for entry in entries:
-            if not entry:
-                continue
-            video_id = str(entry.get("id") or "")
-            if not is_valid_video_id(video_id) and entry.get("url"):
-                m = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})", str(entry.get("url")))
-                if m:
-                    video_id = m.group(1)
-            if not is_valid_video_id(video_id) or video_id in seen:
-                continue
-            seen.add(video_id)
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f"ytsearch15:{safe_q}", download=False)
+            entries = info.get("entries", []) if info else []
+            for entry in entries:
+                if not entry:
+                    continue
+                video_id = str(entry.get("id") or "")
+                if not is_valid_video_id(video_id) and entry.get("url"):
+                    m = re.search(r"(?:v=|/)([0-9A-Za-z_-]{11})", str(entry.get("url")))
+                    if m:
+                        video_id = m.group(1)
+                if not is_valid_video_id(video_id) or video_id in seen:
+                    continue
+                seen.add(video_id)
 
-            title = str(entry.get("title") or "Unknown Title")[:160]
-            channel = str(entry.get("uploader") or entry.get("channel") or "YouTube Artist")[:100]
-            dur_sec, dur_fmt = format_duration(entry.get("duration"))
-            thumb = entry.get("thumbnail")
-            if not thumb and isinstance(entry.get("thumbnails"), list) and entry["thumbnails"]:
-                thumb = entry["thumbnails"][-1].get("url")
-            thumb = safe_https_thumbnail(thumb, video_id)
+                title = str(entry.get("title") or "Unknown Title")[:160]
+                channel = str(entry.get("uploader") or entry.get("channel") or "YouTube Artist")[:100]
+                dur_sec, dur_fmt = format_duration(entry.get("duration"))
+                thumb = entry.get("thumbnail")
+                if not thumb and isinstance(entry.get("thumbnails"), list) and entry["thumbnails"]:
+                    thumb = entry["thumbnails"][-1].get("url")
+                thumb = safe_https_thumbnail(thumb, video_id)
 
-            results.append(
-                {
-                    "id": video_id,
-                    "youtubeId": video_id,
-                    "title": title,
-                    "channel": channel,
-                    "artist": channel,
-                    "thumbnail": thumb,
-                    "durationSeconds": dur_sec,
-                    "durationFormatted": dur_fmt,
-                }
-            )
+                results.append(
+                    {
+                        "id": video_id,
+                        "youtubeId": video_id,
+                        "title": title,
+                        "channel": channel,
+                        "artist": channel,
+                        "thumbnail": thumb,
+                        "durationSeconds": dur_sec,
+                        "durationFormatted": dur_fmt,
+                    }
+                )
+    except Exception as exc:
+        if is_upstream_rate_limit_error(exc):
+            raise UpstreamRateLimitError("YouTube search rate-limited") from exc
+        raise
     return results
 
 
@@ -132,8 +156,15 @@ def search_with_innertube(query: str) -> list:
         method="POST",
     )
 
-    with safe_urlopen(req, timeout=6) as resp:
-        data = json.loads(resp.read().decode("utf-8"))
+    try:
+        with safe_urlopen(req, timeout=6) as resp:
+            if getattr(resp, "status", 200) in (403, 429):
+                raise UpstreamRateLimitError(f"InnerTube HTTP {resp.status}")
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 429):
+            raise UpstreamRateLimitError(f"InnerTube HTTP {exc.code}") from exc
+        raise
 
     sections = (
         data.get("contents", {})
@@ -198,12 +229,8 @@ def search_with_piped(query: str) -> list:
     safe_q = validate_search_query(query)
     if not safe_q:
         return []
-    mirrors = [
-        "https://pipedapi.kavin.rocks",
-        "https://pipedapi.adminforge.de",
-        "https://api.piped.private.coffee",
-    ]
-    for base in mirrors:
+    saw_rate_limit = False
+    for base in PIPED_MIRRORS:
         try:
             url = f"{base}/search?q={quote(safe_q)}&filter=videos"
             req = urllib.request.Request(
@@ -211,7 +238,11 @@ def search_with_piped(query: str) -> list:
                 headers={"Accept": "application/json", "User-Agent": "Kiddwave/2.0"},
             )
             with safe_urlopen(req, timeout=4) as resp:
-                if resp.status != 200:
+                status = getattr(resp, "status", 200)
+                if status in (403, 429):
+                    saw_rate_limit = True
+                    continue
+                if status != 200:
                     continue
                 data = json.loads(resp.read().decode("utf-8"))
                 results = []
@@ -242,9 +273,136 @@ def search_with_piped(query: str) -> list:
                         break
                 if results:
                     return results
+        except urllib.error.HTTPError as exc:
+            if exc.code in (403, 429):
+                saw_rate_limit = True
+            continue
         except Exception:
             continue
+    if saw_rate_limit:
+        raise UpstreamRateLimitError("Piped mirrors rate-limited")
     return []
+
+
+def search_with_invidious(query: str) -> list:
+    safe_q = validate_search_query(query)
+    if not safe_q:
+        return []
+    saw_rate_limit = False
+    for base in INVIDIOUS_MIRRORS:
+        try:
+            url = f"{base}/api/v1/search?q={quote(safe_q)}&type=video"
+            req = urllib.request.Request(
+                url,
+                headers={"Accept": "application/json", "User-Agent": "Kiddwave/2.0"},
+            )
+            with safe_urlopen(req, timeout=4) as resp:
+                status = getattr(resp, "status", 200)
+                if status in (403, 429):
+                    saw_rate_limit = True
+                    continue
+                if status != 200:
+                    continue
+                items = json.loads(resp.read().decode("utf-8"))
+                if not isinstance(items, list):
+                    continue
+                results = []
+                seen = set()
+                for item in items:
+                    if not isinstance(item, dict):
+                        continue
+                    vid = str(item.get("videoId") or "")
+                    if not is_valid_video_id(vid) or vid in seen:
+                        continue
+                    seen.add(vid)
+                    dur_sec, dur_fmt = format_duration(item.get("lengthSeconds"))
+                    thumbs = item.get("videoThumbnails") or []
+                    raw_thumb = thumbs[0].get("url") if isinstance(thumbs, list) and thumbs else None
+                    channel = str(item.get("author") or "YouTube Artist")[:100]
+                    results.append(
+                        {
+                            "id": vid,
+                            "youtubeId": vid,
+                            "title": str(item.get("title") or "Unknown Title")[:160],
+                            "channel": channel,
+                            "artist": channel,
+                            "thumbnail": safe_https_thumbnail(raw_thumb, vid),
+                            "durationSeconds": dur_sec,
+                            "durationFormatted": dur_fmt,
+                        }
+                    )
+                    if len(results) >= 15:
+                        break
+                if results:
+                    return results
+        except urllib.error.HTTPError as exc:
+            if exc.code in (403, 429):
+                saw_rate_limit = True
+            continue
+        except Exception:
+            continue
+    if saw_rate_limit:
+        raise UpstreamRateLimitError("Invidious mirrors rate-limited")
+    return []
+
+
+def run_search_pipeline(query: str) -> tuple[list, bool]:
+    """
+    Executes multi-tier search with automatic 429/403 anti-ban cooldown and
+    Piped/Invidious mirror failover. Returns (results, rate_limited).
+    """
+    results: list = []
+    saw_rate_limit = False
+
+    if not is_youtube_cooled_down():
+        try:
+            results = search_with_ytdlp(query)
+        except UpstreamRateLimitError:
+            saw_rate_limit = True
+            mark_youtube_cooldown(60.0)
+            results = []
+        except Exception as exc:
+            if is_upstream_rate_limit_error(exc):
+                saw_rate_limit = True
+                mark_youtube_cooldown(60.0)
+            results = []
+
+        if not results and not is_youtube_cooled_down():
+            try:
+                results = search_with_innertube(query)
+            except UpstreamRateLimitError:
+                saw_rate_limit = True
+                mark_youtube_cooldown(60.0)
+                results = []
+            except Exception as exc:
+                if is_upstream_rate_limit_error(exc):
+                    saw_rate_limit = True
+                    mark_youtube_cooldown(60.0)
+                results = []
+    else:
+        saw_rate_limit = True
+
+    if not results:
+        try:
+            results = search_with_piped(query)
+        except UpstreamRateLimitError:
+            saw_rate_limit = True
+            results = []
+        except Exception:
+            results = []
+
+    if not results:
+        try:
+            results = search_with_invidious(query)
+        except UpstreamRateLimitError:
+            saw_rate_limit = True
+            results = []
+        except Exception:
+            results = []
+
+    if results:
+        return results, False
+    return [], saw_rate_limit
 
 
 class handler(BaseHTTPRequestHandler):
@@ -271,6 +429,14 @@ class handler(BaseHTTPRequestHandler):
             )
             if not cors_ok:
                 self._send_json(403, {"error": "Origin not allowed."}, extra_headers=cors_headers)
+                return
+
+            if is_blocked_user_agent(self.headers.get("user-agent")):
+                self._send_json(
+                    403,
+                    {"error": "Automated requests are not permitted."},
+                    extra_headers=cors_headers,
+                )
                 return
 
             if len(self.path) > 2048:
@@ -309,6 +475,20 @@ class handler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": "Query exceeds maximum length."}, extra_headers=cors_headers)
                 return
 
+            if not verify_request_signature(
+                self.headers,
+                params,
+                "/api/search",
+                raw_q.strip(),
+                allow_query_params=False,
+            ):
+                self._send_json(
+                    403,
+                    {"error": "Invalid or expired request signature."},
+                    extra_headers=cors_headers,
+                )
+                return
+
             query = validate_search_query(raw_q)
             if not query:
                 self._send_json(200, [], extra_headers=cors_headers)
@@ -320,7 +500,7 @@ class handler(BaseHTTPRequestHandler):
                 self._send_json(
                     200,
                     cached,
-                    cache_control="public, s-maxage=300, stale-while-revalidate=600",
+                    cache_control=SEARCH_CACHE_CONTROL,
                     extra_headers=cors_headers,
                 )
                 return
@@ -335,32 +515,25 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             try:
-                results = []
-                try:
-                    results = search_with_ytdlp(query)
-                except Exception:
-                    results = []
-
-                if not results:
-                    try:
-                        results = search_with_innertube(query)
-                    except Exception:
-                        results = []
-
-                if not results:
-                    try:
-                        results = search_with_piped(query)
-                    except Exception:
-                        results = []
+                results, rate_limited = run_search_pipeline(query)
             finally:
                 EXTRACTION_SEMAPHORE.release()
+
+            if not results and rate_limited:
+                self._send_json(
+                    503,
+                    {
+                        "error": "Search providers are temporarily busy. Please try again in a few moments.",
+                        "rateLimited": True,
+                    },
+                    extra_headers={**cors_headers, "Retry-After": "15"},
+                )
+                return
 
             if results:
                 _RESULT_CACHE.set(cache_key, results)
 
-            cache_hdr = (
-                "public, s-maxage=300, stale-while-revalidate=600" if results else "no-store"
-            )
+            cache_hdr = SEARCH_CACHE_CONTROL if results else "no-store"
             self._send_json(200, results, cache_control=cache_hdr, extra_headers=cors_headers)
         except Exception:
             self._send_json(500, {"error": "Internal server error."})

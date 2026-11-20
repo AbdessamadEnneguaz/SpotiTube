@@ -194,9 +194,35 @@ if (currentTitle) currentTitle.addEventListener('click', openCoverModal);
 // ========================================================
 // Track Discovery & Playback
 // ========================================================
+async function signSearchHeaders(query) {
+  const ts = String(Math.floor(Date.now() / 1000));
+  const subtle = window.crypto && window.crypto.subtle;
+  if (!subtle) return { 'X-KW-Timestamp': ts };
+  try {
+    const enc = new TextEncoder();
+    const key = await subtle.importKey(
+      'raw',
+      enc.encode('kw-v1-a8f4c291e5b07d33'),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+    const sigBuf = await subtle.sign('HMAC', key, enc.encode(`${ts}:/api/search:${String(query || '').trim()}`));
+    const sigHex = Array.from(new Uint8Array(sigBuf))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    return { 'X-KW-Timestamp': ts, 'X-KW-Signature': sigHex };
+  } catch {
+    return { 'X-KW-Timestamp': ts };
+  }
+}
+
 async function fetchTracks(query = '') {
   try {
-    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+    const sigHeaders = await signSearchHeaders(query);
+    const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+      headers: { Accept: 'application/json', ...sigHeaders }
+    });
     const data = await res.json();
     const items = Array.isArray(data) ? data : (data.tracks || []);
     currentPlaylist = items.map(item => ({

@@ -180,6 +180,29 @@ function extractVideosFromYouTubeJson(data: any): SearchResultItem[] {
   return results;
 }
 
+const INVIDIOUS_MIRRORS = [
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de',
+  'https://yewtu.be'
+];
+
+class UpstreamRateLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UpstreamRateLimitError';
+  }
+}
+
+let youtubeSearchCooldownUntil = 0;
+
+function isYoutubeSearchCooledDown(): boolean {
+  return Date.now() < youtubeSearchCooldownUntil;
+}
+
+function markYoutubeSearchCooldown(ms = 60_000): void {
+  youtubeSearchCooldownUntil = Math.max(youtubeSearchCooldownUntil, Date.now() + ms);
+}
+
 // Layer 1: YouTube InnerTube JSON API (Keyless)
 async function searchViaInnerTube(query: string): Promise<SearchResultItem[]> {
   const res = await fetch('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', {
@@ -207,6 +230,9 @@ async function searchViaInnerTube(query: string): Promise<SearchResultItem[]> {
     signal: AbortSignal.timeout(6500)
   });
 
+  if (res.status === 429 || res.status === 403) {
+    throw new UpstreamRateLimitError(`InnerTube HTTP ${res.status}`);
+  }
   if (!res.ok) return [];
   const data = await res.json();
   return extractVideosFromYouTubeJson(data);
@@ -225,6 +251,9 @@ async function searchViaYouTubeHtml(query: string): Promise<SearchResultItem[]> 
     signal: AbortSignal.timeout(6500)
   });
 
+  if (response.status === 429 || response.status === 403) {
+    throw new UpstreamRateLimitError(`YouTube HTML HTTP ${response.status}`);
+  }
   if (!response.ok) return [];
   const html = await response.text();
   const match =
@@ -243,6 +272,7 @@ async function searchViaPublicMirrors(query: string): Promise<SearchResultItem[]
     'https://pipedapi.adminforge.de',
     'https://api.piped.private.coffee'
   ];
+  let sawRateLimit = false;
 
   for (const base of pipedMirrors) {
     try {
@@ -250,6 +280,10 @@ async function searchViaPublicMirrors(query: string): Promise<SearchResultItem[]
         headers: { Accept: 'application/json' },
         signal: AbortSignal.timeout(3500)
       });
+      if (res.status === 429 || res.status === 403) {
+        sawRateLimit = true;
+        continue;
+      }
       if (!res.ok) continue;
       const contentType = res.headers.get('content-type') || '';
       if (!contentType.includes('application/json')) continue;
@@ -285,66 +319,164 @@ async function searchViaPublicMirrors(query: string): Promise<SearchResultItem[]
     }
   }
 
+  if (sawRateLimit) {
+    throw new UpstreamRateLimitError('Piped search mirrors rate-limited');
+  }
   return [];
 }
 
-async function runSearchPipeline(cleanQuery: string): Promise<SearchResultItem[]> {
-  try {
-    const innerTubeResults = await searchViaInnerTube(cleanQuery);
-    if (innerTubeResults.length > 0) return innerTubeResults;
-  } catch (err) {
-    console.warn('[Search] InnerTube notice:', (err as Error)?.message);
-  }
+// Layer 4: Public Invidious API fallback
+async function searchViaInvidiousMirrors(query: string): Promise<SearchResultItem[]> {
+  let sawRateLimit = false;
+  for (const base of INVIDIOUS_MIRRORS) {
+    try {
+      const res = await fetch(`${base}/api/v1/search?q=${encodeURIComponent(query)}&type=video`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(3500)
+      });
+      if (res.status === 429 || res.status === 403) {
+        sawRateLimit = true;
+        continue;
+      }
+      if (!res.ok) continue;
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) continue;
 
-  try {
-    const htmlResults = await searchViaYouTubeHtml(cleanQuery);
-    if (htmlResults.length > 0) return htmlResults;
-  } catch (err) {
-    console.warn('[Search] HTML search notice:', (err as Error)?.message);
+      const items = await res.json();
+      if (!Array.isArray(items)) continue;
+      const results: SearchResultItem[] = [];
+      const seen = new Set<string>();
+
+      for (const item of items) {
+        const id = String(item?.videoId || '');
+        if (!isValidVideoId(id) || seen.has(id)) continue;
+        seen.add(id);
+
+        const dur = typeof item?.lengthSeconds === 'number' && item.lengthSeconds > 0 ? item.lengthSeconds : 210;
+        const rawThumb = Array.isArray(item?.videoThumbnails) ? item.videoThumbnails[0]?.url : undefined;
+        const author = String(item?.author || 'Global Artist').slice(0, 120);
+
+        results.push({
+          id,
+          youtubeId: id,
+          title: String(item?.title || 'Unknown Title').slice(0, 200),
+          channel: author,
+          artist: author,
+          thumbnail: safeHttpsThumbnail(rawThumb, id),
+          durationSeconds: dur,
+          durationFormatted: formatSeconds(dur)
+        });
+
+        if (results.length >= 20) break;
+      }
+
+      if (results.length > 0) return results;
+    } catch {
+      // try next mirror
+    }
+  }
+  if (sawRateLimit) {
+    throw new UpstreamRateLimitError('Invidious search mirrors rate-limited');
+  }
+  return [];
+}
+
+export interface SearchPipelineResult {
+  items: SearchResultItem[];
+  rateLimited: boolean;
+}
+
+const inFlightSearchesWithStatus = new Map<string, Promise<SearchPipelineResult>>();
+
+async function runSearchPipelineWithStatus(cleanQuery: string): Promise<SearchPipelineResult> {
+  let sawRateLimit = false;
+
+  if (!isYoutubeSearchCooledDown()) {
+    try {
+      const innerTubeResults = await searchViaInnerTube(cleanQuery);
+      if (innerTubeResults.length > 0) return { items: innerTubeResults, rateLimited: false };
+    } catch (err) {
+      if (err instanceof UpstreamRateLimitError) {
+        sawRateLimit = true;
+        markYoutubeSearchCooldown();
+      }
+      console.warn('[Search] InnerTube notice:', (err as Error)?.message);
+    }
+
+    if (!isYoutubeSearchCooledDown()) {
+      try {
+        const htmlResults = await searchViaYouTubeHtml(cleanQuery);
+        if (htmlResults.length > 0) return { items: htmlResults, rateLimited: false };
+      } catch (err) {
+        if (err instanceof UpstreamRateLimitError) {
+          sawRateLimit = true;
+          markYoutubeSearchCooldown();
+        }
+        console.warn('[Search] HTML search notice:', (err as Error)?.message);
+      }
+    }
+  } else {
+    sawRateLimit = true;
   }
 
   try {
     const mirrorResults = await searchViaPublicMirrors(cleanQuery);
-    if (mirrorResults.length > 0) return mirrorResults;
+    if (mirrorResults.length > 0) return { items: mirrorResults, rateLimited: false };
   } catch (err) {
-    console.warn('[Search] Mirror search notice:', (err as Error)?.message);
+    if (err instanceof UpstreamRateLimitError) sawRateLimit = true;
+    console.warn('[Search] Piped mirror search notice:', (err as Error)?.message);
   }
 
-  return [];
+  try {
+    const invidiousResults = await searchViaInvidiousMirrors(cleanQuery);
+    if (invidiousResults.length > 0) return { items: invidiousResults, rateLimited: false };
+  } catch (err) {
+    if (err instanceof UpstreamRateLimitError) sawRateLimit = true;
+    console.warn('[Search] Invidious mirror search notice:', (err as Error)?.message);
+  }
+
+  return { items: [], rateLimited: sawRateLimit };
 }
 
-export async function searchYouTubeTracks(query: string): Promise<SearchResultItem[]> {
+export async function searchYouTubeTracksWithStatus(query: string): Promise<SearchPipelineResult> {
   const cleanQuery = sanitizeSearchQuery(query);
-  if (!cleanQuery) return [];
+  if (!cleanQuery) return { items: [], rateLimited: false };
 
   const cacheKey = cleanQuery.toLowerCase();
   const now = Date.now();
   const cached = searchResultCache.get(cacheKey);
   if (cached && now < cached.expiresAt) {
-    return cached.items;
+    return { items: cached.items, rateLimited: false };
   }
 
-  // Deduplicate concurrent identical queries (DoS / stampede protection)
-  const existingPromise = inFlightSearches.get(cacheKey);
+  const existingPromise = inFlightSearchesWithStatus.get(cacheKey);
   if (existingPromise) {
     return existingPromise;
   }
 
-  const promise = runSearchPipeline(cleanQuery)
-    .then((items) => {
-      if (items.length > 0) {
+  const promise = runSearchPipelineWithStatus(cleanQuery)
+    .then((result) => {
+      if (result.items.length > 0) {
         if (searchResultCache.size >= MAX_CACHED_QUERIES) {
           const oldestKey = searchResultCache.keys().next().value;
           if (oldestKey !== undefined) searchResultCache.delete(oldestKey);
         }
-        searchResultCache.set(cacheKey, { items, expiresAt: Date.now() + SEARCH_CACHE_TTL_MS });
+        searchResultCache.set(cacheKey, {
+          items: result.items,
+          expiresAt: Date.now() + SEARCH_CACHE_TTL_MS
+        });
       }
-      return items;
+      return result;
     })
     .finally(() => {
-      inFlightSearches.delete(cacheKey);
+      inFlightSearchesWithStatus.delete(cacheKey);
     });
 
-  inFlightSearches.set(cacheKey, promise);
+  inFlightSearchesWithStatus.set(cacheKey, promise);
   return promise;
+}
+
+export async function searchYouTubeTracks(query: string): Promise<SearchResultItem[]> {
+  const res = await searchYouTubeTracksWithStatus(query);
+  return res.items;
 }

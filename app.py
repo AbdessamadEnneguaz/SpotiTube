@@ -5,13 +5,14 @@ from api._security import (
     SafeTTLCache,
     evaluate_cors,
     extract_client_ip,
+    is_blocked_user_agent,
     is_rate_limited,
     validate_search_query,
+    verify_request_signature,
 )
 from api.search import (
-    search_with_ytdlp,
-    search_with_innertube,
-    search_with_piped,
+    SEARCH_CACHE_CONTROL,
+    run_search_pipeline,
 )
 
 app = Flask(__name__, static_folder="python-local/static", template_folder="python-local/static")
@@ -73,6 +74,9 @@ def index():
 
 @app.route('/api/search', methods=['GET', 'OPTIONS'])
 def search():
+    if is_blocked_user_agent(request.headers.get("User-Agent")):
+        return jsonify({"error": "Automated requests are not permitted."}), 403
+
     if "url" in request.args:
         return jsonify({"error": "Arbitrary URL parameters are not permitted."}), 400
 
@@ -86,6 +90,9 @@ def search():
     if len(raw_q) > 200:
         return jsonify({"error": "Query exceeds maximum length."}), 400
 
+    if not verify_request_signature(request.headers, request.args, "/api/search", raw_q.strip()):
+        return jsonify({"error": "Invalid or expired request signature."}), 403
+
     query = validate_search_query(raw_q)
     if not query:
         return jsonify([])
@@ -93,33 +100,33 @@ def search():
     cache_key = query.lower()
     cached = _SEARCH_CACHE.get(cache_key)
     if cached is not None:
-        return jsonify(cached)
+        resp = make_response(jsonify(cached), 200)
+        resp.headers["Cache-Control"] = SEARCH_CACHE_CONTROL
+        return resp
 
     if not EXTRACTION_SEMAPHORE.acquire(timeout=2.0):
         return jsonify({"error": "Search service busy. Please retry shortly."}), 503
 
     try:
-        results = []
-        try:
-            results = search_with_ytdlp(query)
-        except Exception:
-            results = []
-
-        if not results:
-            try:
-                results = search_with_innertube(query)
-            except Exception:
-                results = []
-
-        if not results:
-            try:
-                results = search_with_piped(query)
-            except Exception:
-                results = []
-
+        results, rate_limited = run_search_pipeline(query)
+        if not results and rate_limited:
+            resp = make_response(
+                jsonify(
+                    {
+                        "error": "Search providers are temporarily busy. Please try again in a few moments.",
+                        "rateLimited": True,
+                    }
+                ),
+                503,
+            )
+            resp.headers["Retry-After"] = "15"
+            resp.headers["Cache-Control"] = "no-store"
+            return resp
         if results:
             _SEARCH_CACHE.set(cache_key, results)
-        return jsonify(results)
+        resp = make_response(jsonify(results), 200)
+        resp.headers["Cache-Control"] = SEARCH_CACHE_CONTROL if results else "no-store"
+        return resp
     finally:
         EXTRACTION_SEMAPHORE.release()
 

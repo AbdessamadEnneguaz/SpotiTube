@@ -11,7 +11,6 @@ interface CachedAudioStream {
 }
 
 const audioUrlCache = new Map<string, CachedAudioStream>();
-const inFlightAudioLookups = new Map<string, Promise<CachedAudioStream | null>>();
 
 export function isValidAudioVideoId(id: unknown): id is string {
   return typeof id === 'string' && YOUTUBE_ID_RE.test(id);
@@ -64,6 +63,59 @@ export function clampByteRange(
   return { start, end: Math.max(start, end) };
 }
 
+const PIPED_AUDIO_MIRRORS = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.adminforge.de',
+  'https://api.piped.private.coffee'
+];
+
+const INVIDIOUS_AUDIO_MIRRORS = [
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de',
+  'https://yewtu.be'
+];
+
+let youtubeAudioCooldownUntil = 0;
+
+function isYoutubeAudioCooledDown(): boolean {
+  return Date.now() < youtubeAudioCooldownUntil;
+}
+
+export function markYoutubeAudioCooldown(ms = 60_000): void {
+  youtubeAudioCooldownUntil = Math.max(youtubeAudioCooldownUntil, Date.now() + ms);
+}
+
+class AudioRateLimitError extends Error {}
+
+function isAllowedStreamHost(rawUrl: unknown): boolean {
+  if (isSafeGoogleVideoUrl(rawUrl)) return true;
+  if (typeof rawUrl !== 'string' || !rawUrl.startsWith('https://') || rawUrl.length > 2048) {
+    return false;
+  }
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase();
+    if (
+      host === 'inv.nadeko.net' ||
+      host === 'invidious.nerdvpn.de' ||
+      host === 'yewtu.be' ||
+      host === 'pipedapi.kavin.rocks' ||
+      host === 'pipedapi.adminforge.de' ||
+      host === 'api.piped.private.coffee'
+    ) {
+      return true;
+    }
+    return (
+      /^[a-z0-9-]+proxy[a-z0-9-]*\.[a-z0-9.-]+$/.test(host) &&
+      (host.endsWith('.kavin.rocks') ||
+        host.endsWith('.adminforge.de') ||
+        host.endsWith('.private.coffee'))
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function fetchAudioStreamFromInnerTube(videoId: string): Promise<CachedAudioStream | null> {
   try {
     const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
@@ -86,26 +138,34 @@ async function fetchAudioStreamFromInnerTube(videoId: string): Promise<CachedAud
       signal: AbortSignal.timeout(4500)
     });
 
+    if (res.status === 429 || res.status === 403) {
+      throw new AudioRateLimitError(`InnerTube audio HTTP ${res.status}`);
+    }
     if (!res.ok) return null;
     const data = await res.json();
-    if (data?.playabilityStatus?.status !== 'OK') return null;
+    if (data?.playabilityStatus?.status !== 'OK') {
+      const reason = String(data?.playabilityStatus?.reason || '').toLowerCase();
+      if (reason.includes('sign in') || reason.includes('429') || reason.includes('rate')) {
+        throw new AudioRateLimitError('InnerTube verification triggered');
+      }
+      return null;
+    }
 
     const adaptiveFormats = Array.isArray(data?.streamingData?.adaptiveFormats)
       ? data.streamingData.adaptiveFormats
       : [];
 
-    // Prefer MP4 AAC audio (universal support across iOS Safari, Android Chrome, and Desktop)
     const mp4Audios = adaptiveFormats.filter(
       (f: any) =>
         typeof f?.mimeType === 'string' &&
         f.mimeType.includes('audio/mp4') &&
-        isSafeGoogleVideoUrl(f?.url)
+        isAllowedStreamHost(f?.url)
     );
     const anyAudios = adaptiveFormats.filter(
       (f: any) =>
         typeof f?.mimeType === 'string' &&
         f.mimeType.startsWith('audio/') &&
-        isSafeGoogleVideoUrl(f?.url)
+        isAllowedStreamHost(f?.url)
     );
 
     const pool = mp4Audios.length > 0 ? mp4Audios : anyAudios;
@@ -121,40 +181,160 @@ async function fetchAudioStreamFromInnerTube(videoId: string): Promise<CachedAud
       contentLength: Number.isFinite(parsedLen) && parsedLen > 0 ? parsedLen : null,
       expiresAt: Date.now() + AUDIO_CACHE_TTL_MS
     };
-  } catch {
+  } catch (err) {
+    if (err instanceof AudioRateLimitError) throw err;
     return null;
   }
 }
 
-export async function resolveAudioStream(videoId: string): Promise<CachedAudioStream | null> {
-  if (!isValidAudioVideoId(videoId)) return null;
+async function fetchAudioStreamFromPiped(videoId: string): Promise<CachedAudioStream | null> {
+  let sawRateLimit = false;
+  for (const base of PIPED_AUDIO_MIRRORS) {
+    try {
+      const res = await fetch(`${base}/streams/${encodeURIComponent(videoId)}`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (res.status === 429 || res.status === 403) {
+        sawRateLimit = true;
+        continue;
+      }
+      if (!res.ok) continue;
+      const data = await res.json();
+      const streams = Array.isArray(data?.audioStreams) ? data.audioStreams : [];
+      const valid = streams.filter((s: any) => isAllowedStreamHost(s?.url));
+      if (valid.length === 0) continue;
+      const mp4s = valid.filter((s: any) => String(s?.mimeType || '').includes('audio/mp4'));
+      const pool = mp4s.length > 0 ? mp4s : valid;
+      pool.sort((a: any, b: any) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0));
+      const best = pool[0];
+      const parsedLen = Number.parseInt(String(best.contentLength || ''), 10);
+      return {
+        url: String(best.url),
+        mimeType: String(best.mimeType || 'audio/mp4').split(';')[0] || 'audio/mp4',
+        contentLength: Number.isFinite(parsedLen) && parsedLen > 0 ? parsedLen : null,
+        expiresAt: Date.now() + AUDIO_CACHE_TTL_MS
+      };
+    } catch {
+      // try next mirror
+    }
+  }
+  if (sawRateLimit) throw new AudioRateLimitError('Piped audio rate-limited');
+  return null;
+}
+
+async function fetchAudioStreamFromInvidious(videoId: string): Promise<CachedAudioStream | null> {
+  let sawRateLimit = false;
+  for (const base of INVIDIOUS_AUDIO_MIRRORS) {
+    try {
+      const res = await fetch(`${base}/api/v1/videos/${encodeURIComponent(videoId)}`, {
+        headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(4000)
+      });
+      if (res.status === 429 || res.status === 403) {
+        sawRateLimit = true;
+        continue;
+      }
+      if (!res.ok) continue;
+      const data = await res.json();
+      const formats = Array.isArray(data?.adaptiveFormats) ? data.adaptiveFormats : [];
+      const valid = formats.filter(
+        (f: any) =>
+          typeof f?.type === 'string' && f.type.startsWith('audio/') && isAllowedStreamHost(f?.url)
+      );
+      if (valid.length === 0) continue;
+      const mp4s = valid.filter((f: any) => String(f.type).includes('audio/mp4'));
+      const pool = mp4s.length > 0 ? mp4s : valid;
+      pool.sort((a: any, b: any) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0));
+      const best = pool[0];
+      const parsedLen = Number.parseInt(String(best.clen || ''), 10);
+      return {
+        url: String(best.url),
+        mimeType: String(best.type).split(';')[0] || 'audio/mp4',
+        contentLength: Number.isFinite(parsedLen) && parsedLen > 0 ? parsedLen : null,
+        expiresAt: Date.now() + AUDIO_CACHE_TTL_MS
+      };
+    } catch {
+      // try next mirror
+    }
+  }
+  if (sawRateLimit) throw new AudioRateLimitError('Invidious audio rate-limited');
+  return null;
+}
+
+export interface AudioResolutionResult {
+  stream: CachedAudioStream | null;
+  rateLimited: boolean;
+}
+
+const inFlightAudioWithStatus = new Map<string, Promise<AudioResolutionResult>>();
+
+export async function resolveAudioStreamWithStatus(videoId: string): Promise<AudioResolutionResult> {
+  if (!isValidAudioVideoId(videoId)) return { stream: null, rateLimited: false };
 
   const now = Date.now();
   const cached = audioUrlCache.get(videoId);
   if (cached && now < cached.expiresAt) {
-    return cached;
+    return { stream: cached, rateLimited: false };
   }
 
-  const existing = inFlightAudioLookups.get(videoId);
+  const existing = inFlightAudioWithStatus.get(videoId);
   if (existing) return existing;
 
-  const lookup = fetchAudioStreamFromInnerTube(videoId)
-    .then((result) => {
-      if (result) {
-        if (audioUrlCache.size >= MAX_AUDIO_CACHE) {
-          const oldest = audioUrlCache.keys().next().value;
-          if (oldest !== undefined) audioUrlCache.delete(oldest);
-        }
-        audioUrlCache.set(videoId, result);
-      }
-      return result;
-    })
-    .finally(() => {
-      inFlightAudioLookups.delete(videoId);
-    });
+  const lookup = (async (): Promise<AudioResolutionResult> => {
+    let sawRateLimit = false;
+    let stream: CachedAudioStream | null = null;
 
-  inFlightAudioLookups.set(videoId, lookup);
+    if (!isYoutubeAudioCooledDown()) {
+      try {
+        stream = await fetchAudioStreamFromInnerTube(videoId);
+      } catch (err) {
+        if (err instanceof AudioRateLimitError) {
+          sawRateLimit = true;
+          markYoutubeAudioCooldown();
+        }
+      }
+    } else {
+      sawRateLimit = true;
+    }
+
+    if (!stream) {
+      try {
+        stream = await fetchAudioStreamFromPiped(videoId);
+      } catch (err) {
+        if (err instanceof AudioRateLimitError) sawRateLimit = true;
+      }
+    }
+
+    if (!stream) {
+      try {
+        stream = await fetchAudioStreamFromInvidious(videoId);
+      } catch (err) {
+        if (err instanceof AudioRateLimitError) sawRateLimit = true;
+      }
+    }
+
+    if (stream) {
+      if (audioUrlCache.size >= MAX_AUDIO_CACHE) {
+        const oldest = audioUrlCache.keys().next().value;
+        if (oldest !== undefined) audioUrlCache.delete(oldest);
+      }
+      audioUrlCache.set(videoId, stream);
+      return { stream, rateLimited: false };
+    }
+
+    return { stream: null, rateLimited: sawRateLimit };
+  })().finally(() => {
+    inFlightAudioWithStatus.delete(videoId);
+  });
+
+  inFlightAudioWithStatus.set(videoId, lookup);
   return lookup;
+}
+
+export async function resolveAudioStream(videoId: string): Promise<CachedAudioStream | null> {
+  const res = await resolveAudioStreamWithStatus(videoId);
+  return res.stream;
 }
 
 export function invalidateAudioStreamCache(videoId: string): void {

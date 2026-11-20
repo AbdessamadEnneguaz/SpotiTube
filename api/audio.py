@@ -1,5 +1,6 @@
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import urllib.error
 import urllib.request
 import json
 import re
@@ -12,109 +13,292 @@ except ImportError:
 from api._security import (
     EXTRACTION_SEMAPHORE,
     SafeTTLCache,
+    UpstreamRateLimitError,
     evaluate_cors,
     extract_client_ip,
+    is_blocked_user_agent,
     is_rate_limited,
-    is_safe_googlevideo_url,
+    is_safe_upstream_audio_url,
+    is_upstream_rate_limit_error,
     is_valid_video_id,
+    is_youtube_cooled_down,
+    mark_youtube_cooldown,
     safe_urlopen,
     validate_audio_video_id,
+    verify_request_signature,
 )
 
 # 15-minute bounded TTL cache for resolved audio stream metadata
 _AUDIO_CACHE = SafeTTLCache(maxsize=128, ttl=900)
 _CHUNK_BYTES = 524288
 
+PIPED_MIRRORS = (
+    "https://pipedapi.kavin.rocks",
+    "https://pipedapi.adminforge.de",
+    "https://api.piped.private.coffee",
+)
 
-def resolve_audio_stream(video_id: str):
-    if not is_valid_video_id(video_id):
-        return None
-    cached = _AUDIO_CACHE.get(video_id)
-    if cached is not None:
-        return cached
+INVIDIOUS_MIRRORS = (
+    "https://inv.nadeko.net",
+    "https://invidious.nerdvpn.de",
+    "https://yewtu.be",
+)
 
-    acquired = EXTRACTION_SEMAPHORE.acquire(timeout=2.0)
-    if not acquired:
+
+def _pick_best_audio_stream(candidates: list[dict]):
+    safe_candidates = [c for c in candidates if is_safe_upstream_audio_url(c.get("url"))]
+    if not safe_candidates:
         return None
-    try:
-        stream = _resolve_via_innertube(video_id)
-        if not stream and yt_dlp is not None:
-            stream = _resolve_via_ytdlp(video_id)
-        if stream and is_safe_googlevideo_url(stream.get("url")):
-            _AUDIO_CACHE.set(video_id, stream)
-            return stream
-        return None
-    finally:
-        EXTRACTION_SEMAPHORE.release()
+    mp4s = [c for c in safe_candidates if "audio/mp4" in str(c.get("mime_type", ""))]
+    pool = mp4s if mp4s else safe_candidates
+    pool.sort(key=lambda c: int(c.get("bitrate") or 0), reverse=True)
+    best = pool[0]
+    return {
+        "url": best["url"],
+        "mime_type": best.get("mime_type") or "audio/mp4",
+        "content_length": best.get("content_length"),
+    }
 
 
 def _resolve_via_innertube(video_id: str):
-    try:
-        payload = json.dumps(
-            {
-                "videoId": video_id,
-                "context": {
-                    "client": {
-                        "clientName": "ANDROID_VR",
-                        "clientVersion": "1.59.24",
-                        "hl": "en",
-                        "gl": "US",
-                    }
-                },
-            }
-        ).encode("utf-8")
-        req = urllib.request.Request(
-            "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with safe_urlopen(req, timeout=4.5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        if data.get("playabilityStatus", {}).get("status") != "OK":
-            return None
-        formats = data.get("streamingData", {}).get("adaptiveFormats", [])
-        mp4s = [
-            f
-            for f in formats
-            if "audio/mp4" in str(f.get("mimeType", "")) and is_safe_googlevideo_url(f.get("url", ""))
-        ]
-        if not mp4s:
-            return None
-        mp4s.sort(key=lambda f: int(f.get("bitrate") or 0), reverse=True)
-        best = mp4s[0]
-        clen = best.get("contentLength")
-        return {
-            "url": best["url"],
-            "mime_type": "audio/mp4",
-            "content_length": int(clen) if clen and str(clen).isdigit() else None,
+    payload = json.dumps(
+        {
+            "videoId": video_id,
+            "context": {
+                "client": {
+                    "clientName": "ANDROID_VR",
+                    "clientVersion": "1.59.24",
+                    "hl": "en",
+                    "gl": "US",
+                }
+            },
         }
-    except Exception:
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        "https://www.youtube.com/youtubei/v1/player?prettyPrint=false",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with safe_urlopen(req, timeout=4.5) as resp:
+            if getattr(resp, "status", 200) in (403, 429):
+                raise UpstreamRateLimitError(f"InnerTube audio HTTP {resp.status}")
+            data = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 429):
+            raise UpstreamRateLimitError(f"InnerTube audio HTTP {exc.code}") from exc
         return None
+    except Exception as exc:
+        if is_upstream_rate_limit_error(exc):
+            raise UpstreamRateLimitError("InnerTube audio rate-limited") from exc
+        return None
+
+    status = data.get("playabilityStatus", {}).get("status")
+    if status != "OK":
+        reason = str(data.get("playabilityStatus", {}).get("reason") or "").lower()
+        if "sign in" in reason or "rate" in reason or "429" in reason:
+            raise UpstreamRateLimitError("InnerTube playback verification triggered")
+        return None
+
+    formats = data.get("streamingData", {}).get("adaptiveFormats", [])
+    candidates = []
+    for f in formats:
+        mime = str(f.get("mimeType", ""))
+        if not mime.startswith("audio/"):
+            continue
+        clen = f.get("contentLength")
+        candidates.append(
+            {
+                "url": f.get("url", ""),
+                "mime_type": mime.split(";")[0] or "audio/mp4",
+                "bitrate": int(f.get("bitrate") or 0),
+                "content_length": int(clen) if clen and str(clen).isdigit() else None,
+            }
+        )
+    return _pick_best_audio_stream(candidates)
 
 
 def _resolve_via_ytdlp(video_id: str):
+    if yt_dlp is None:
+        return None
+    ydl_opts = {
+        "format": "bestaudio[ext=m4a]/bestaudio/best",
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "socket_timeout": 5,
+        "allowed_extractors": ["youtube"],
+    }
     try:
-        ydl_opts = {
-            "format": "bestaudio[ext=m4a]/bestaudio/best",
-            "quiet": True,
-            "no_warnings": True,
-            "noplaylist": True,
-            "socket_timeout": 5,
-            "allowed_extractors": ["youtube"],
-        }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
             url = info.get("url") if info else ""
-            if is_safe_googlevideo_url(url):
+            if is_safe_upstream_audio_url(url):
                 return {
                     "url": url,
                     "mime_type": "audio/mp4" if info.get("ext") == "m4a" else "audio/webm",
                     "content_length": info.get("filesize") or info.get("filesize_approx"),
                 }
-    except Exception:
-        pass
+    except Exception as exc:
+        if is_upstream_rate_limit_error(exc):
+            raise UpstreamRateLimitError("yt-dlp audio rate-limited") from exc
     return None
+
+
+def _resolve_via_piped(video_id: str):
+    saw_rate_limit = False
+    for base in PIPED_MIRRORS:
+        try:
+            req = urllib.request.Request(
+                f"{base}/streams/{video_id}",
+                headers={"Accept": "application/json", "User-Agent": "Kiddwave/2.0"},
+            )
+            with safe_urlopen(req, timeout=4.0) as resp:
+                status = getattr(resp, "status", 200)
+                if status in (403, 429):
+                    saw_rate_limit = True
+                    continue
+                if status != 200:
+                    continue
+                data = json.loads(resp.read().decode("utf-8"))
+                raw_streams = data.get("audioStreams") or []
+                candidates = []
+                for s in raw_streams:
+                    if not isinstance(s, dict):
+                        continue
+                    mime = str(s.get("mimeType") or "audio/mp4").split(";")[0]
+                    clen = s.get("contentLength")
+                    candidates.append(
+                        {
+                            "url": s.get("url", ""),
+                            "mime_type": mime if mime.startswith("audio/") else "audio/mp4",
+                            "bitrate": int(s.get("bitrate") or 0),
+                            "content_length": int(clen) if clen and str(clen).isdigit() else None,
+                        }
+                    )
+                best = _pick_best_audio_stream(candidates)
+                if best:
+                    return best
+        except urllib.error.HTTPError as exc:
+            if exc.code in (403, 429):
+                saw_rate_limit = True
+            continue
+        except Exception:
+            continue
+    if saw_rate_limit:
+        raise UpstreamRateLimitError("Piped audio mirrors rate-limited")
+    return None
+
+
+def _resolve_via_invidious(video_id: str):
+    saw_rate_limit = False
+    for base in INVIDIOUS_MIRRORS:
+        try:
+            req = urllib.request.Request(
+                f"{base}/api/v1/videos/{video_id}",
+                headers={"Accept": "application/json", "User-Agent": "Kiddwave/2.0"},
+            )
+            with safe_urlopen(req, timeout=4.0) as resp:
+                status = getattr(resp, "status", 200)
+                if status in (403, 429):
+                    saw_rate_limit = True
+                    continue
+                if status != 200:
+                    continue
+                data = json.loads(resp.read().decode("utf-8"))
+                formats = data.get("adaptiveFormats") or []
+                candidates = []
+                for f in formats:
+                    if not isinstance(f, dict):
+                        continue
+                    mime_raw = str(f.get("type") or "")
+                    if not mime_raw.startswith("audio/"):
+                        continue
+                    clen = f.get("clen")
+                    candidates.append(
+                        {
+                            "url": f.get("url", ""),
+                            "mime_type": mime_raw.split(";")[0] or "audio/mp4",
+                            "bitrate": int(f.get("bitrate") or 0),
+                            "content_length": int(clen) if clen and str(clen).isdigit() else None,
+                        }
+                    )
+                best = _pick_best_audio_stream(candidates)
+                if best:
+                    return best
+        except urllib.error.HTTPError as exc:
+            if exc.code in (403, 429):
+                saw_rate_limit = True
+            continue
+        except Exception:
+            continue
+    if saw_rate_limit:
+        raise UpstreamRateLimitError("Invidious audio mirrors rate-limited")
+    return None
+
+
+def resolve_audio_stream_with_status(video_id: str) -> tuple[dict | None, bool]:
+    """
+    Resolves an audio stream URL with anti-ban cooldown and Piped/Invidious fallback.
+    Returns (stream_dict_or_none, rate_limited).
+    """
+    if not is_valid_video_id(video_id):
+        return None, False
+    cached = _AUDIO_CACHE.get(video_id)
+    if cached is not None:
+        return cached, False
+
+    acquired = EXTRACTION_SEMAPHORE.acquire(timeout=2.0)
+    if not acquired:
+        return None, True
+    try:
+        stream = None
+        saw_rate_limit = False
+
+        if not is_youtube_cooled_down():
+            try:
+                stream = _resolve_via_innertube(video_id)
+            except UpstreamRateLimitError:
+                saw_rate_limit = True
+                mark_youtube_cooldown(60.0)
+                stream = None
+
+            if not stream and not is_youtube_cooled_down() and yt_dlp is not None:
+                try:
+                    stream = _resolve_via_ytdlp(video_id)
+                except UpstreamRateLimitError:
+                    saw_rate_limit = True
+                    mark_youtube_cooldown(60.0)
+                    stream = None
+        else:
+            saw_rate_limit = True
+
+        if not stream:
+            try:
+                stream = _resolve_via_piped(video_id)
+            except UpstreamRateLimitError:
+                saw_rate_limit = True
+                stream = None
+
+        if not stream:
+            try:
+                stream = _resolve_via_invidious(video_id)
+            except UpstreamRateLimitError:
+                saw_rate_limit = True
+                stream = None
+
+        if stream and is_safe_upstream_audio_url(stream.get("url")):
+            _AUDIO_CACHE.set(video_id, stream)
+            return stream, False
+        return None, saw_rate_limit
+    finally:
+        EXTRACTION_SEMAPHORE.release()
+
+
+def resolve_audio_stream(video_id: str):
+    stream, _ = resolve_audio_stream_with_status(video_id)
+    return stream
 
 
 class handler(BaseHTTPRequestHandler):
@@ -141,6 +325,14 @@ class handler(BaseHTTPRequestHandler):
             )
             if not cors_ok:
                 self._send_json(403, {"error": "Origin not allowed."}, extra_headers=cors_headers)
+                return
+
+            if is_blocked_user_agent(self.headers.get("user-agent")):
+                self._send_json(
+                    403,
+                    {"error": "Automated requests are not permitted."},
+                    extra_headers=cors_headers,
+                )
                 return
 
             if len(self.path) > 2048 or "\x00" in self.path:
@@ -171,6 +363,20 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             raw_vid = params.get("v", params.get("id", [""]))[0]
+            if not verify_request_signature(
+                self.headers,
+                params,
+                "/api/audio",
+                raw_vid.strip(),
+                allow_query_params=True,
+            ):
+                self._send_json(
+                    403,
+                    {"error": "Invalid or expired request signature."},
+                    extra_headers=cors_headers,
+                )
+                return
+
             video_id = validate_audio_video_id(raw_vid)
             probe = params.get("probe", ["0"])[0] == "1"
 
@@ -178,8 +384,20 @@ class handler(BaseHTTPRequestHandler):
                 self._send_json(400, {"error": "Invalid video ID."}, extra_headers=cors_headers)
                 return
 
-            stream = resolve_audio_stream(video_id)
+            stream, rate_limited = resolve_audio_stream_with_status(video_id)
             if probe:
+                if not stream and rate_limited:
+                    self._send_json(
+                        503,
+                        {
+                            "available": False,
+                            "mimeType": None,
+                            "rateLimited": True,
+                            "error": "Audio providers are temporarily busy. Please try again in a few moments.",
+                        },
+                        extra_headers={**cors_headers, "Retry-After": "15"},
+                    )
+                    return
                 self._send_json(
                     200,
                     {
@@ -190,7 +408,17 @@ class handler(BaseHTTPRequestHandler):
                 )
                 return
 
-            if not stream or not is_safe_googlevideo_url(stream.get("url")):
+            if not stream or not is_safe_upstream_audio_url(stream.get("url")):
+                if rate_limited:
+                    self._send_json(
+                        503,
+                        {
+                            "error": "Audio providers are temporarily busy. Please try again in a few moments.",
+                            "rateLimited": True,
+                        },
+                        extra_headers={**cors_headers, "Retry-After": "15"},
+                    )
+                    return
                 self._send_json(404, {"error": "Audio stream unavailable."}, extra_headers=cors_headers)
                 return
 
@@ -233,6 +461,20 @@ class handler(BaseHTTPRequestHandler):
                         self.send_header(k, v)
                     self.end_headers()
                     self.wfile.write(data)
+            except urllib.error.HTTPError as exc:
+                _AUDIO_CACHE.delete(video_id)
+                if exc.code in (403, 429):
+                    mark_youtube_cooldown(60.0)
+                    self._send_json(
+                        503,
+                        {
+                            "error": "Audio providers are temporarily busy. Please try again in a few moments.",
+                            "rateLimited": True,
+                        },
+                        extra_headers={**cors_headers, "Retry-After": "15"},
+                    )
+                    return
+                self._send_json(502, {"error": "Audio upstream unavailable."}, extra_headers=cors_headers)
             except Exception:
                 _AUDIO_CACHE.delete(video_id)
                 self._send_json(502, {"error": "Audio upstream unavailable."}, extra_headers=cors_headers)

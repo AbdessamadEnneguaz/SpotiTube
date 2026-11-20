@@ -3,6 +3,7 @@ import { parseYouTubeTitle, filterTracks } from '../utils/formatters';
 import { CURATED_TRACKS } from '../data/curatedTracks';
 import { loadCachedTrackEntries, searchCachedTracks } from '../utils/trackCache';
 import { isValidYouTubeId, sanitizeMediaUrl, sanitizeClientText } from '../utils/security';
+import { createSignedHeaders } from '../utils/requestSignature';
 
 let isScriptLoading = false;
 let isScriptLoaded = false;
@@ -178,6 +179,7 @@ export async function searchYouTube(
   }
 
   const searchApiUrl = `/api/search?q=${encodeURIComponent(trimmed)}`;
+  let backendNotice: string | undefined;
 
   // 1. Try /api/search (CacheFirst via Service Worker; when offline check Cache Storage directly first)
   if (!isOnline && typeof window !== 'undefined' && 'caches' in window) {
@@ -195,8 +197,12 @@ export async function searchYouTube(
     }
   } else {
     try {
+      const sigHeaders = await createSignedHeaders('/api/search', trimmed);
       const res = await fetch(searchApiUrl, {
-        headers: { Accept: 'application/json' }
+        headers: {
+          Accept: 'application/json',
+          ...sigHeaders,
+        }
       });
       const contentType = res.headers.get('content-type') || '';
       if (res.ok && contentType.includes('application/json')) {
@@ -204,6 +210,11 @@ export async function searchYouTube(
         const items = Array.isArray(data) ? data : (data.tracks || []);
         if (items.length > 0) {
           return { tracks: mapRawSearchItems(items), source: 'local_backend' };
+        }
+      } else if ((res.status === 429 || res.status === 503) && contentType.includes('application/json')) {
+        const errPayload = await res.json().catch(() => null);
+        if (typeof errPayload?.error === 'string' && errPayload.error.trim()) {
+          backendNotice = sanitizeClientText(errPayload.error, 140);
         }
       }
     } catch (err) {
@@ -242,7 +253,7 @@ export async function searchYouTube(
     message:
       merged.length > 0
         ? `${isOnline ? 'Catalog' : 'Offline cached'} matches (${merged.length} tracks)`
-        : 'No matching tracks found — try another search query'
+        : (backendNotice || 'No matching tracks found — try another search query')
   };
 }
 

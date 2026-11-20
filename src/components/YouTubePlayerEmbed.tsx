@@ -14,6 +14,7 @@ import {
   showBackgroundNowPlayingNotification,
   clearBackgroundNowPlayingNotification
 } from '../utils/backgroundPermission';
+import { buildSignedAudioUrl, createSignedHeaders } from '../utils/requestSignature';
 
 interface YouTubePlayerEmbedProps {
   currentTrack: Track | null;
@@ -709,17 +710,26 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         }
       }
       const audioEl = nativeAudioRef.current;
-      audioEl.src = cachedNativeUrl;
-      audioEl.volume = isMutedRef.current ? 0 : Math.min(1, Math.max(0, volumeRef.current / 100));
-      audioEl.muted = isMutedRef.current;
-      if (isPlayingRef.current) {
-        audioEl.play().catch(() => {
-          if (currentTrackRef.current?.youtubeId === currentTrack.youtubeId) {
-            startOrLoadYouTubeIFrame(currentTrack, 0);
-          }
-        });
-      }
-      return;
+      let cancelledCached = false;
+      (async () => {
+        const freshUrl = cachedNativeUrl.startsWith('/api/audio')
+          ? await buildSignedAudioUrl(currentTrack.youtubeId)
+          : cachedNativeUrl;
+        if (cancelledCached || currentTrackRef.current?.youtubeId !== currentTrack.youtubeId) return;
+        audioEl.src = freshUrl;
+        audioEl.volume = isMutedRef.current ? 0 : Math.min(1, Math.max(0, volumeRef.current / 100));
+        audioEl.muted = isMutedRef.current;
+        if (isPlayingRef.current) {
+          audioEl.play().catch(() => {
+            if (currentTrackRef.current?.youtubeId === currentTrack.youtubeId) {
+              startOrLoadYouTubeIFrame(currentTrack, 0);
+            }
+          });
+        }
+      })();
+      return () => {
+        cancelledCached = true;
+      };
     }
 
     // Start immediately via pre-warmed IFrame with 0ms wait
@@ -729,14 +739,18 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     (async () => {
       const probeBackend = async (): Promise<string | null> => {
         try {
+          const sigHeaders = await createSignedHeaders('/api/audio', currentTrack.youtubeId);
           const probeRes = await fetch(
             `/api/audio?v=${encodeURIComponent(currentTrack.youtubeId)}&probe=1`,
-            { signal: AbortSignal.timeout(1500) }
+            {
+              headers: sigHeaders,
+              signal: AbortSignal.timeout(1500)
+            }
           );
           if (probeRes.ok) {
             const probeData = await probeRes.json();
             if (probeData?.available) {
-              return `/api/audio?v=${encodeURIComponent(currentTrack.youtubeId)}`;
+              return await buildSignedAudioUrl(currentTrack.youtubeId);
             }
           }
         } catch {
