@@ -12,8 +12,11 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         includeAssets: [
+          'favicon.ico',
           'icon.svg',
           'apple-touch-icon.png',
+          'icon-192.png',
+          'icon-512.png',
           'pwa-192x192.png',
           'pwa-512x512.png',
           'pwa-maskable-512x512.png',
@@ -25,12 +28,24 @@ export default defineConfig(() => {
           short_name: 'Kiddwave',
           description:
             'High-speed global music streaming and discovery with zero-lag playback, regional charts, and offline track caching.',
-          theme_color: '#070607',
-          background_color: '#070607',
+          theme_color: '#09090b',
+          background_color: '#09090b',
           display: 'standalone',
           start_url: '/',
           scope: '/',
           icons: [
+            {
+              src: '/icon-192.png',
+              sizes: '192x192',
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: '/icon-512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'any',
+            },
             {
               src: '/pwa-192x192.png',
               sizes: '192x192',

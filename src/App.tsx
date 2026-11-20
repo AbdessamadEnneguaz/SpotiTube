@@ -15,8 +15,26 @@ import {
   DEFAULT_FAVORITES_COVER,
   WorldCountryPreset
 } from './data/curatedTracks';
-import { AppView, Track, Playlist, RepeatMode } from './types/music';
+import {
+  AppView,
+  AudioSettings,
+  LyricsData,
+  OfflineTrackMetadata,
+  Track,
+  Playlist,
+  RepeatMode,
+} from './types/music';
 import { searchYouTube } from './services/youtubeApi';
+import { fetchTrackLyrics } from './services/lyricsApi';
+import { loadAudioSettings, saveAudioSettings } from './utils/audioSettings';
+import {
+  OfflineStorageStats,
+  clearAllOfflineTracks,
+  deleteOfflineTrack,
+  getOfflineStorageStats,
+  listOfflineTracks,
+  saveTrackOffline,
+} from './utils/offlineDb';
 import {
   getNextIndex,
   getPreviousIndex,
@@ -101,6 +119,16 @@ const BackgroundPermissionModal = lazy(() =>
     default: m.BackgroundPermissionModal
   }))
 );
+const AudioSettingsModal = lazy(() =>
+  import('./components/AudioSettingsModal').then((m) => ({
+    default: m.AudioSettingsModal
+  }))
+);
+const LyricsView = lazy(() =>
+  import('./components/LyricsView').then((m) => ({
+    default: m.LyricsView
+  }))
+);
 
 const PageLoader: React.FC = () => (
   <div className="flex items-center justify-center py-20 text-[#A39E9F] gap-3">
@@ -110,12 +138,22 @@ const PageLoader: React.FC = () => (
 );
 
 export default function App() {
-  // Animated Splash Screen (skipped automatically if ?autostart=1)
+  // Animated Splash Screen (once per session, skipped automatically if ?autostart=1)
   const [showSplash, setShowSplash] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
-    return !new URLSearchParams(window.location.search).has('autostart');
+    if (new URLSearchParams(window.location.search).has('autostart')) return false;
+    try {
+      return window.sessionStorage.getItem('kiddwave_splash_seen') !== '1';
+    } catch {
+      return true;
+    }
   });
   const handleSplashComplete = useCallback(() => {
+    try {
+      window.sessionStorage.setItem('kiddwave_splash_seen', '1');
+    } catch {
+      // Ignore storage restriction
+    }
     setShowSplash(false);
   }, []);
 
@@ -184,6 +222,7 @@ export default function App() {
   const [navHistory, setNavHistory] = useState<RouteEntry[]>([]);
   const currentView = currentRoute.view;
   const selectedPlaylistId = currentRoute.playlistId;
+  const [libraryInitialTab, setLibraryInitialTab] = useState<'all' | 'offline'>('all');
 
   const [selectedRegion, setSelectedRegion] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -236,20 +275,78 @@ export default function App() {
     return getFrequentTracks(cachedTrackEntries, 5);
   }, [cachedTrackEntries]);
 
+  // IndexedDB Offline Library State (real binary audio + cover blobs)
+  const [offlineTracks, setOfflineTracks] = useState<OfflineTrackMetadata[]>([]);
+  const [offlineStorageStats, setOfflineStorageStats] = useState<OfflineStorageStats>({
+    trackCount: 0,
+    totalBytes: 0,
+    quotaBytes: null,
+    usageBytes: null,
+  });
+  const [downloadProgressMap, setDownloadProgressMap] = useState<Record<string, number>>({});
+  const [isSavingPlaylistOffline, setIsSavingPlaylistOffline] = useState(false);
+
+  const refreshOfflineLibrary = useCallback(async () => {
+    const list = await listOfflineTracks();
+    const stats = await getOfflineStorageStats(list);
+    setOfflineTracks(list);
+    setOfflineStorageStats(stats);
+  }, []);
+
+  useEffect(() => {
+    void refreshOfflineLibrary();
+  }, [refreshOfflineLibrary]);
+
+  const offlineSavedIds = useMemo(() => {
+    return new Set(offlineTracks.map((item) => item.youtubeId));
+  }, [offlineTracks]);
+
   const cachedYoutubeIds = useMemo(() => {
-    return getCachedYoutubeIdSet(cachedTrackEntries);
-  }, [cachedTrackEntries]);
+    const combined = getCachedYoutubeIdSet(cachedTrackEntries);
+    offlineSavedIds.forEach((id) => combined.add(id));
+    return combined;
+  }, [cachedTrackEntries, offlineSavedIds]);
 
   const cachedTracksList = useMemo(() => {
-    return cachedTrackEntries.map((entry) => entry.track);
-  }, [cachedTrackEntries]);
+    const seen = new Set<string>();
+    const list: Track[] = [];
+    for (const item of offlineTracks) {
+      if (item.track?.youtubeId && !seen.has(item.track.youtubeId)) {
+        seen.add(item.track.youtubeId);
+        list.push(item.track);
+      }
+    }
+    for (const entry of cachedTrackEntries) {
+      if (entry.track?.youtubeId && !seen.has(entry.track.youtubeId)) {
+        seen.add(entry.track.youtubeId);
+        list.push(entry.track);
+      }
+    }
+    return list;
+  }, [cachedTrackEntries, offlineTracks]);
 
   useEffect(() => {
     saveRecentSearches(recentSearches);
   }, [recentSearches]);
 
+  // Audio Mastering Settings (EQ, Normalization, Crossfade) persisted in localStorage
+  const [audioSettings, setAudioSettings] = useState<AudioSettings>(() => loadAudioSettings());
+  useEffect(() => {
+    saveAudioSettings(audioSettings);
+  }, [audioSettings]);
+
+  // Live Synced Lyrics State (LRCLIB)
+  const [lyricsData, setLyricsData] = useState<LyricsData>({
+    syncedLines: [],
+    plainText: null,
+    source: 'none',
+  });
+  const [isLyricsLoading, setIsLyricsLoading] = useState(false);
+
   // Modals & Panels State
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [isLyricsOpen, setIsLyricsOpen] = useState(false);
+  const [isAudioSettingsOpen, setIsAudioSettingsOpen] = useState(false);
   const [isExpandedCoverOpen, setIsExpandedCoverOpen] = useState(false);
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false);
   const [isBgPermissionOpen, setIsBgPermissionOpen] = useState(false);
@@ -370,10 +467,18 @@ export default function App() {
 
   const handleNavigate = useCallback(
     (view: AppView) => {
+      if (view === 'library') {
+        setLibraryInitialTab('all');
+      }
       navigateTo(view, null, { focusSearch: view === 'search' });
     },
     [navigateTo]
   );
+
+  const handleOpenOfflineVault = useCallback(() => {
+    setLibraryInitialTab('offline');
+    navigateTo('library', null);
+  }, [navigateTo]);
 
   const handleOpenPlaylist = useCallback(
     (playlistId: string) => {
@@ -389,6 +494,8 @@ export default function App() {
   }, []);
 
   const hasOpenModalOrDrawer =
+    isAudioSettingsOpen ||
+    isLyricsOpen ||
     isExpandedCoverOpen ||
     isQueueOpen ||
     isLegalOpen ||
@@ -411,7 +518,11 @@ export default function App() {
 
     const win = window as unknown as { __spotitubeBack?: () => void };
     win.__spotitubeBack = () => {
-      if (isExpandedCoverOpen) {
+      if (isAudioSettingsOpen) {
+        setIsAudioSettingsOpen(false);
+      } else if (isLyricsOpen) {
+        setIsLyricsOpen(false);
+      } else if (isExpandedCoverOpen) {
         setIsExpandedCoverOpen(false);
       } else if (isQueueOpen) {
         setIsQueueOpen(false);
@@ -434,6 +545,8 @@ export default function App() {
   }, [
     canGoBack,
     hasOpenModalOrDrawer,
+    isAudioSettingsOpen,
+    isLyricsOpen,
     isExpandedCoverOpen,
     isQueueOpen,
     isLegalOpen,
@@ -606,14 +719,34 @@ export default function App() {
       } else {
         setSearchStatusMsg(res.message || `Catalog · ${res.tracks.length} tracks`);
       }
-
-      if (trimmed.length >= 2 && res.tracks.length > 0) {
-        setRecentSearches((prev) => addSearchTerm(prev, trimmed));
-      }
     }, 350);
 
     return () => clearTimeout(timer);
   }, [searchQuery, isOfflineMode, cachedTracksList]);
+
+  // Fetch LRCLIB synced/plain lyrics whenever Lyrics panel opens or track changes
+  useEffect(() => {
+    if (!isLyricsOpen || !currentTrack) return;
+    let cancelled = false;
+    setIsLyricsLoading(true);
+    fetchTrackLyrics(currentTrack)
+      .then((res) => {
+        if (!cancelled) {
+          setLyricsData(res);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setLyricsData({ syncedLines: [], plainText: null, source: 'none' });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsLyricsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLyricsOpen, currentTrack?.youtubeId]);
 
   const handleCacheTrack = useCallback((track: Track) => {
     setCachedTrackEntries((prev) => {
@@ -624,6 +757,96 @@ export default function App() {
     void syncTrackToServiceWorkerCache(track);
     setOfflineNotice(`Cached "${track.title}" for offline playback`);
   }, []);
+
+  const handleSaveTrackOffline = useCallback(
+    async (track: Track) => {
+      if (!track?.youtubeId) return;
+      if (isOfflineMode) {
+        setOfflineNotice('Connect to the internet to download tracks for offline listening.');
+        return;
+      }
+
+      setDownloadProgressMap((prev) => ({ ...prev, [track.youtubeId]: 5 }));
+      try {
+        await saveTrackOffline(track, (pct) => {
+          setDownloadProgressMap((prev) => ({ ...prev, [track.youtubeId]: pct }));
+        });
+        setCachedTrackEntries((prev) => {
+          const updated = recordTrackPlay(prev, track);
+          saveCachedTrackEntries(updated);
+          return updated;
+        });
+        void syncTrackToServiceWorkerCache(track);
+        await refreshOfflineLibrary();
+        setOfflineNotice(`Saved "${track.title}" to Offline Library`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unable to save track offline.';
+        setOfflineNotice(msg);
+      } finally {
+        setDownloadProgressMap((prev) => {
+          const copy = { ...prev };
+          delete copy[track.youtubeId];
+          return copy;
+        });
+      }
+    },
+    [isOfflineMode, refreshOfflineLibrary]
+  );
+
+  const handleDeleteOfflineTrack = useCallback(
+    async (youtubeId: string) => {
+      await deleteOfflineTrack(youtubeId);
+      await refreshOfflineLibrary();
+      setOfflineNotice('Removed track from Offline Library');
+    },
+    [refreshOfflineLibrary]
+  );
+
+  const handleClearAllOffline = useCallback(async () => {
+    await clearAllOfflineTracks();
+    await refreshOfflineLibrary();
+    setOfflineNotice('Cleared all downloaded offline audio');
+  }, [refreshOfflineLibrary]);
+
+  const handleSavePlaylistOffline = useCallback(
+    async (playlist: Playlist) => {
+      if (!playlist?.tracks?.length) return;
+      if (isOfflineMode) {
+        setOfflineNotice('Connect to the internet to download playlists.');
+        return;
+      }
+      setIsSavingPlaylistOffline(true);
+      let savedCount = 0;
+      try {
+        for (const track of playlist.tracks) {
+          if (offlineSavedIds.has(track.youtubeId)) {
+            savedCount += 1;
+            continue;
+          }
+          setDownloadProgressMap((prev) => ({ ...prev, [track.youtubeId]: 5 }));
+          try {
+            await saveTrackOffline(track, (pct) => {
+              setDownloadProgressMap((prev) => ({ ...prev, [track.youtubeId]: pct }));
+            });
+            savedCount += 1;
+            await refreshOfflineLibrary();
+          } catch {
+            // Continue saving remaining tracks if a single video lacks downloadable audio
+          } finally {
+            setDownloadProgressMap((prev) => {
+              const copy = { ...prev };
+              delete copy[track.youtubeId];
+              return copy;
+            });
+          }
+        }
+        setOfflineNotice(`Saved ${savedCount}/${playlist.tracks.length} tracks from "${playlist.name}" offline`);
+      } finally {
+        setIsSavingPlaylistOffline(false);
+      }
+    },
+    [isOfflineMode, offlineSavedIds, refreshOfflineLibrary]
+  );
 
   const handlePlayTrack = useCallback(
     (track: Track, contextList?: Track[]) => {
@@ -940,7 +1163,29 @@ export default function App() {
     [duration]
   );
 
-  const featuredHomeTracks = useMemo(() => CURATED_TRACKS.slice(0, 4), []);
+  const featuredHomeTracks = useMemo(() => CURATED_TRACKS.slice(0, 8), []);
+
+  const nextQueueTrack = useMemo(() => {
+    if (sleepTimerMinutes === -1 || repeatMode === 'one') return null;
+    const idx = getNextIndex(queue.length, queueIndex, repeatMode, isShuffle, shuffledIndices);
+    if (idx === null || idx < 0 || idx >= queue.length) return null;
+    const candidate = queue[idx];
+    if (!isTrackPlayableOffline(candidate, cachedYoutubeIds, isOfflineMode)) return null;
+    return candidate;
+  }, [queue, queueIndex, repeatMode, isShuffle, shuffledIndices, sleepTimerMinutes, cachedYoutubeIds, isOfflineMode]);
+
+  const isEqCustomized = useMemo(() => {
+    const eq = audioSettings.equalizer;
+    return (
+      eq.preset !== 'flat' ||
+      eq.band60Hz !== 0 ||
+      eq.band230Hz !== 0 ||
+      eq.band910Hz !== 0 ||
+      eq.band3600Hz !== 0 ||
+      eq.band14000Hz !== 0 ||
+      audioSettings.crossfadeSeconds > 0
+    );
+  }, [audioSettings]);
 
   // Latest playback refs for zero-churn global desktop keyboard shortcuts
   const shortcutStateRef = useRef({
@@ -997,19 +1242,54 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#070607] text-[#F4F1F1] font-sans antialiased">
+    <div className="flex flex-col h-[100dvh] w-full overflow-hidden bg-[#050506] text-[#F4F1F1] font-sans antialiased">
       {showSplash && <SplashScreen onComplete={handleSplashComplete} />}
 
-      {/* Application Workspace */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* Minimal Left Navigation Rail */}
+      {/* Full-Width Spotify-Style Top Header */}
+      <Header
+        currentView={currentView}
+        canGoBack={canGoBack}
+        searchQuery={searchQuery}
+        recentSearches={recentSearches}
+        isOfflineMode={isOfflineMode}
+        onSearchChange={(q) => {
+          setSearchQuery(q);
+          if (currentView !== 'search' && q.trim()) {
+            navigateTo('search');
+          }
+        }}
+        onSubmitSearch={(term) => {
+          handleAddRecentSearch(term);
+        }}
+        onSelectRecentSearch={handleSelectRecentSearch}
+        onRemoveRecentSearch={handleRemoveRecentSearch}
+        onClearRecentSearches={handleClearAllRecentSearches}
+        onOpenLegal={(tab) => {
+          setLegalTab(tab || 'privacy');
+          setIsLegalOpen(true);
+        }}
+        onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
+        onNavigateHome={() => handleNavigate('home')}
+        onOpenBrowse={() => handleNavigate(currentView === 'mixes' ? 'countries' : 'mixes')}
+        onBack={handleBack}
+      />
+
+      {/* Application Workspace: Dedicated Library Left Panel + Rounded Main Content Viewport */}
+      <div className="flex flex-1 min-h-0 gap-0 md:gap-2 md:px-2 md:pb-2 overflow-hidden bg-[#050506]">
+        {/* Dedicated Your Library Left Panel */}
         <Sidebar
           currentView={currentView}
           selectedPlaylistId={selectedPlaylistId}
           customPlaylists={customPlaylists}
           likedCount={likedTrackIds.size}
+          offlineTracks={offlineTracks}
+          cachedTrackEntries={cachedTrackEntries}
+          currentTrack={currentTrack}
           onNavigate={handleNavigate}
+          onOpenOfflineVault={handleOpenOfflineVault}
           onSelectPlaylist={handleOpenPlaylist}
+          onPlayTrack={handlePlayTrack}
+          onSelectArtist={handleSelectRecentSearch}
           onOpenLegal={(tab) => {
             setLegalTab(tab || 'privacy');
             setIsLegalOpen(true);
@@ -1018,33 +1298,7 @@ export default function App() {
         />
 
         {/* Central Content Viewport */}
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-[#070607] overflow-hidden relative">
-          <Header
-            currentView={currentView}
-            canGoBack={canGoBack}
-            searchQuery={searchQuery}
-            recentSearches={recentSearches}
-            isOfflineMode={isOfflineMode}
-            onSearchChange={(q) => {
-              setSearchQuery(q);
-              if (currentView !== 'search' && q.trim()) {
-                navigateTo('search');
-              }
-            }}
-            onSubmitSearch={(term) => {
-              handleAddRecentSearch(term);
-            }}
-            onSelectRecentSearch={handleSelectRecentSearch}
-            onRemoveRecentSearch={handleRemoveRecentSearch}
-            onClearRecentSearches={handleClearAllRecentSearches}
-            onOpenLegal={(tab) => {
-              setLegalTab(tab || 'privacy');
-              setIsLegalOpen(true);
-            }}
-            onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
-            onBack={handleBack}
-          />
-
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col bg-[#09090b] md:bg-gradient-to-b md:from-[#26090d]/45 md:via-[#09090b] md:to-[#070607] md:border md:border-white/[0.06] md:rounded-xl overflow-hidden relative">
           {showApkUpdateBanner && apkUpdateManifest && androidApkEnv.installedVersion && (
             <ApkUpdateBanner
               manifest={apkUpdateManifest}
@@ -1055,21 +1309,24 @@ export default function App() {
 
           <main
             ref={mainContentRef}
-            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 md:px-7 py-4 sm:py-6 pb-6 scrollbar-thin"
+            className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-5 md:px-6 py-4 sm:py-5 pb-6 scrollbar-thin"
           >
             <div key={viewKey} className="animate-view-fade-slide w-full max-w-7xl mx-auto">
               {currentView === 'home' && (
                 <HomePage
                   featuredTracks={featuredHomeTracks}
+                  cachedTrackEntries={cachedTrackEntries}
+                  offlineTracks={offlineTracks}
+                  likedCount={likedTrackIds.size}
                   currentTrack={currentTrack}
                   isPlaying={isPlaying}
                   cachedYoutubeIds={cachedYoutubeIds}
                   isOfflineMode={isOfflineMode}
-                  cachedCount={cachedTrackEntries.length}
-                  mixesCount={allPlaylists.length}
                   countriesCount={WORLD_COUNTRY_PRESETS.length}
-                  onPlayRotation={handlePlayWorldRotation}
                   onNavigatePage={handleNavigate}
+                  onOpenPlaylist={handleOpenPlaylist}
+                  onOpenOfflineVault={handleOpenOfflineVault}
+                  onSelectArtist={handleSelectRecentSearch}
                   onInspectTrack={handleInspectTrack}
                   onPlayToggleTrack={handlePlayToggleTrack}
                 />
@@ -1100,6 +1357,8 @@ export default function App() {
                       isPlaying={isPlaying}
                       likedTrackIds={likedTrackIds}
                       cachedYoutubeIds={cachedYoutubeIds}
+                      offlineSavedIds={offlineSavedIds}
+                      downloadProgressMap={downloadProgressMap}
                       isOfflineMode={isOfflineMode}
                       customPlaylists={customPlaylists}
                       onPlayTrack={handlePlayTrack}
@@ -1109,6 +1368,8 @@ export default function App() {
                       onPlayNext={handlePlayNext}
                       onAddToPlaylist={handleAddToPlaylist}
                       onCacheTrack={handleCacheTrack}
+                      onSaveOffline={handleSaveTrackOffline}
+                      onDeleteOffline={handleDeleteOfflineTrack}
                     />
                   )}
 
@@ -1120,6 +1381,8 @@ export default function App() {
                       isPlaying={isPlaying}
                       likedTrackIds={likedTrackIds}
                       cachedYoutubeIds={cachedYoutubeIds}
+                      offlineSavedIds={offlineSavedIds}
+                      downloadProgressMap={downloadProgressMap}
                       isOfflineMode={isOfflineMode}
                       customPlaylists={customPlaylists}
                       onPlayTrack={handlePlayTrack}
@@ -1129,6 +1392,8 @@ export default function App() {
                       onPlayNext={handlePlayNext}
                       onAddToPlaylist={handleAddToPlaylist}
                       onCacheTrack={handleCacheTrack}
+                      onSaveOffline={handleSaveTrackOffline}
+                      onDeleteOffline={handleDeleteOfflineTrack}
                     />
                   )}
 
@@ -1139,6 +1404,9 @@ export default function App() {
                       isPlaying={isPlaying}
                       likedTrackIds={likedTrackIds}
                       cachedYoutubeIds={cachedYoutubeIds}
+                      offlineSavedIds={offlineSavedIds}
+                      downloadProgressMap={downloadProgressMap}
+                      isSavingPlaylist={isSavingPlaylistOffline}
                       isOfflineMode={isOfflineMode}
                       customPlaylists={customPlaylists}
                       onPlayTrack={handlePlayTrack}
@@ -1148,6 +1416,9 @@ export default function App() {
                       onPlayNext={handlePlayNext}
                       onAddToPlaylist={handleAddToPlaylist}
                       onCacheTrack={handleCacheTrack}
+                      onSaveOffline={handleSaveTrackOffline}
+                      onDeleteOffline={handleDeleteOfflineTrack}
+                      onSavePlaylistOffline={handleSavePlaylistOffline}
                     />
                   )}
 
@@ -1163,6 +1434,8 @@ export default function App() {
                       isPlaying={isPlaying}
                       likedTrackIds={likedTrackIds}
                       cachedYoutubeIds={cachedYoutubeIds}
+                      offlineSavedIds={offlineSavedIds}
+                      downloadProgressMap={downloadProgressMap}
                       isOfflineMode={isOfflineMode}
                       customPlaylists={customPlaylists}
                       onSelectSearch={handleSelectRecentSearch}
@@ -1176,17 +1449,27 @@ export default function App() {
                       onPlayNext={handlePlayNext}
                       onAddToPlaylist={handleAddToPlaylist}
                       onCacheTrack={handleCacheTrack}
+                      onSaveOffline={handleSaveTrackOffline}
+                      onDeleteOffline={handleDeleteOfflineTrack}
                     />
                   )}
 
                   {currentView === 'library' && (
                     <LibraryPage
+                      initialTab={libraryInitialTab}
                       likedCount={likedTrackIds.size}
-                      cachedCount={cachedTrackEntries.length}
+                      cachedCount={cachedTracksList.length}
                       playlists={allPlaylists}
+                      offlineTracks={offlineTracks}
+                      offlineStorageStats={offlineStorageStats}
+                      currentTrack={currentTrack}
+                      isPlaying={isPlaying}
                       onOpenPlaylist={handleOpenPlaylist}
                       onOpenRecent={() => navigateTo('recent')}
                       onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
+                      onPlayTrack={handlePlayTrack}
+                      onDeleteOfflineTrack={handleDeleteOfflineTrack}
+                      onClearAllOffline={handleClearAllOffline}
                     />
                   )}
                 </Suspense>
@@ -1241,6 +1524,10 @@ export default function App() {
             repeatMode={repeatMode}
             isShuffle={isShuffle}
             isLiked={currentTrack ? likedTrackIds.has(currentTrack.id) : false}
+            isSavedOffline={currentTrack ? offlineSavedIds.has(currentTrack.youtubeId) : false}
+            downloadProgress={currentTrack ? (downloadProgressMap[currentTrack.youtubeId] ?? null) : null}
+            lyricsData={lyricsData}
+            isLyricsLoading={isLyricsLoading}
             onPlayPause={handlePlayPause}
             onNext={handleNext}
             onPrevious={handlePrevious}
@@ -1256,6 +1543,44 @@ export default function App() {
             onToggleLike={(track) => handleToggleLike(track)}
             onPlayTrack={handlePlayTrack}
             onSearchArtist={handleSelectRecentSearch}
+            onOpenLyrics={() => setIsLyricsOpen(true)}
+            onOpenAudioSettings={() => setIsAudioSettingsOpen(true)}
+            onOpenQueue={() => {
+              if (typeof window !== 'undefined' && window.innerWidth >= 768) {
+                setIsExpandedCoverOpen(false);
+              }
+              setIsQueueOpen(true);
+            }}
+            onSaveOffline={handleSaveTrackOffline}
+            onDeleteOffline={handleDeleteOfflineTrack}
+          />
+        </Suspense>
+      )}
+
+      {isLyricsOpen && (
+        <Suspense fallback={null}>
+          <LyricsView
+            isOpen={isLyricsOpen}
+            onClose={() => setIsLyricsOpen(false)}
+            track={currentTrack}
+            lyricsData={lyricsData}
+            isLoading={isLyricsLoading}
+            currentTime={currentTime}
+            duration={duration}
+            isPlaying={isPlaying}
+            onPlayPause={handlePlayPause}
+            onSeek={handleSeek}
+          />
+        </Suspense>
+      )}
+
+      {isAudioSettingsOpen && (
+        <Suspense fallback={null}>
+          <AudioSettingsModal
+            isOpen={isAudioSettingsOpen}
+            onClose={() => setIsAudioSettingsOpen(false)}
+            settings={audioSettings}
+            onChange={setAudioSettings}
           />
         </Suspense>
       )}
@@ -1283,6 +1608,9 @@ export default function App() {
 
       <YouTubePlayerEmbed
         currentTrack={currentTrack}
+        nextTrack={nextQueueTrack}
+        repeatMode={repeatMode}
+        audioSettings={audioSettings}
         isPlaying={isPlaying}
         volume={volume}
         isMuted={isMuted}
@@ -1293,6 +1621,7 @@ export default function App() {
         onTrackError={handleTrackError}
         onPlayPause={handlePlayPause}
         onNext={handleNext}
+        onCrossfadeNext={handleNext}
         onPrevious={handlePrevious}
         onSeek={handleSeek}
       />
@@ -1307,8 +1636,11 @@ export default function App() {
         repeatMode={repeatMode}
         isShuffle={isShuffle}
         isLiked={currentTrack ? likedTrackIds.has(currentTrack.id) : false}
+        isSavedOffline={currentTrack ? offlineSavedIds.has(currentTrack.youtubeId) : false}
+        downloadProgress={currentTrack ? (downloadProgressMap[currentTrack.youtubeId] ?? null) : null}
         isQueueOpen={isQueueOpen}
-        activeSleepTimer={sleepTimerMinutes}
+        isLyricsOpen={isLyricsOpen}
+        isEqCustomized={isEqCustomized}
         queueCount={queue.length > 0 ? Math.max(0, queue.length - queueIndex - 1) : 0}
         onPlayPause={handlePlayPause}
         onNext={handleNext}
@@ -1328,8 +1660,11 @@ export default function App() {
           });
         }}
         onToggleLike={(track) => handleToggleLike(track)}
+        onSaveOffline={handleSaveTrackOffline}
+        onDeleteOffline={handleDeleteOfflineTrack}
         onToggleQueue={() => setIsQueueOpen((prev) => !prev)}
-        onOpenSleepTimer={() => setIsSleepTimerOpen(true)}
+        onToggleLyrics={() => setIsLyricsOpen((prev) => !prev)}
+        onOpenAudioSettings={() => setIsAudioSettingsOpen(true)}
         onOpenExpandedCover={() => setIsExpandedCoverOpen(true)}
       />
 

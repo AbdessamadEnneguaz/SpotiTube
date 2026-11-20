@@ -1,23 +1,34 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { loadYouTubeIFrameAPI } from '../services/youtubeApi';
 import { YTPlayerInstance } from '../types/youtube';
-import { Track } from '../types/music';
+import { AudioSettings, RepeatMode, Track } from '../types/music';
 import {
   buildMediaMetadataInit,
   parseMediaBridgeCommand,
   registerPrimaryAudioElement,
   setAudioKeepAlivePlaying,
-  shouldPreserveIntentOnVisibilityPause
+  shouldPreserveIntentOnVisibilityPause,
 } from '../utils/backgroundAudio';
 import { resolveClientMirrorAudio } from '../utils/clientAudioResolver';
 import {
   showBackgroundNowPlayingNotification,
-  clearBackgroundNowPlayingNotification
+  clearBackgroundNowPlayingNotification,
 } from '../utils/backgroundPermission';
 import { buildSignedAudioUrl, createSignedHeaders } from '../utils/requestSignature';
+import { canRouteThroughWebAudio, sharedAudioEngine } from '../utils/audioEngine';
+import {
+  computeCrossfadeGains,
+  isSignatureFresh,
+  shouldPrefetchNextTrack,
+  shouldTriggerCrossfade,
+} from '../utils/gaplessPrefetch';
+import { getOfflineTrackRecord } from '../utils/offlineDb';
 
 interface YouTubePlayerEmbedProps {
   currentTrack: Track | null;
+  nextTrack?: Track | null;
+  repeatMode?: RepeatMode;
+  audioSettings: AudioSettings;
   isPlaying: boolean;
   volume: number;
   isMuted: boolean;
@@ -28,14 +39,37 @@ interface YouTubePlayerEmbedProps {
   onTrackError?: (track: Track, errorCode: number) => void;
   onPlayPause?: () => void;
   onNext?: () => void;
+  onCrossfadeNext?: () => void;
   onPrevious?: () => void;
   onSeek?: (seconds: number) => void;
 }
 
 type EngineMode = 'native_audio' | 'youtube_iframe';
 
+interface CachedStreamEntry {
+  url: string;
+  signedAtMs: number;
+  isBlob?: boolean;
+}
+
+interface PreparedDeckEntry {
+  youtubeId: string;
+  deckIndex: 0 | 1;
+  url: string;
+}
+
+interface ActiveCrossfade {
+  fromEl: HTMLAudioElement;
+  toEl: HTMLAudioElement;
+  durationMs: number;
+  startedAtMs: number;
+}
+
 export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   currentTrack,
+  nextTrack = null,
+  repeatMode = 'off',
+  audioSettings,
   isPlaying,
   volume,
   isMuted,
@@ -46,21 +80,32 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   onTrackError,
   onPlayPause,
   onNext,
+  onCrossfadeNext,
   onPrevious,
-  onSeek
+  onSeek,
 }) => {
   const playerRef = useRef<YTPlayerInstance | null>(null);
-  const nativeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const deckARef = useRef<HTMLAudioElement | null>(null);
+  const deckBRef = useRef<HTMLAudioElement | null>(null);
+  const bypassAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const activeDeckIdxRef = useRef<0 | 1>(0);
+  const isBypassActiveRef = useRef<boolean>(false);
 
   const currentTrackRef = useRef<Track | null>(currentTrack);
+  const nextTrackRef = useRef<Track | null>(nextTrack);
+  const repeatModeRef = useRef<RepeatMode>(repeatMode);
+  const audioSettingsRef = useRef<AudioSettings>(audioSettings);
   const isPlayingRef = useRef<boolean>(isPlaying);
   const volumeRef = useRef<number>(volume);
   const isMutedRef = useRef<boolean>(isMuted);
+
   const onTimeUpdateRef = useRef(onTimeUpdate);
   const onPlayerStateChangeRef = useRef(onPlayerStateChange);
   const onTrackErrorRef = useRef(onTrackError);
   const onPlayPauseRef = useRef(onPlayPause);
   const onNextRef = useRef(onNext);
+  const onCrossfadeNextRef = useRef(onCrossfadeNext);
   const onPreviousRef = useRef(onPrevious);
   const onSeekRef = useRef(onSeek);
 
@@ -72,12 +117,57 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   const keepAliveCtxRef = useRef<AudioContext | null>(null);
   const keepAliveOscRef = useRef<OscillatorNode | null>(null);
 
+  const resolvedStreamCacheRef = useRef<Map<string, CachedStreamEntry>>(new Map());
+  const blobUrlCacheRef = useRef<Map<string, string>>(new Map());
+  const prefetchedForIdRef = useRef<string | null>(null);
+  const preparedDeckRef = useRef<PreparedDeckEntry | null>(null);
+  const crossfadeRef = useRef<ActiveCrossfade | null>(null);
+  const skipNextTrackLoadIdRef = useRef<string | null>(null);
+
   const [isPlayerReady, setIsPlayerReady] = useState(false);
   const [engineMode, setEngineMode] = useState<EngineMode>('youtube_iframe');
+
+  const getDeckEl = (idx: 0 | 1): HTMLAudioElement | null =>
+    idx === 0 ? deckARef.current : deckBRef.current;
+
+  const getActiveNativeAudioEl = (): HTMLAudioElement | null => {
+    if (isBypassActiveRef.current) return bypassAudioRef.current;
+    return getDeckEl(activeDeckIdxRef.current);
+  };
+
+  const getTargetMasterVolume = (): number =>
+    isMutedRef.current ? 0 : Math.min(1, Math.max(0, volumeRef.current / 100));
+
+  const setDeckOutputLevel = (el: HTMLAudioElement | null, gainFactor: number) => {
+    if (!el) return;
+    const masterVol = getTargetMasterVolume();
+    const clampedFactor = Math.min(1, Math.max(0, gainFactor));
+    if (sharedAudioEngine.getIsWebAudioActive(el)) {
+      el.volume = masterVol;
+      el.muted = isMutedRef.current;
+      sharedAudioEngine.setDeckGain(el, clampedFactor);
+    } else {
+      el.volume = masterVol * clampedFactor;
+      el.muted = isMutedRef.current;
+    }
+  };
 
   useEffect(() => {
     currentTrackRef.current = currentTrack;
   }, [currentTrack]);
+
+  useEffect(() => {
+    nextTrackRef.current = nextTrack;
+  }, [nextTrack]);
+
+  useEffect(() => {
+    repeatModeRef.current = repeatMode;
+  }, [repeatMode]);
+
+  useEffect(() => {
+    audioSettingsRef.current = audioSettings;
+    sharedAudioEngine.applySettings(audioSettings);
+  }, [audioSettings]);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -94,13 +184,163 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     onTrackErrorRef.current = onTrackError;
     onPlayPauseRef.current = onPlayPause;
     onNextRef.current = onNext;
+    onCrossfadeNextRef.current = onCrossfadeNext;
     onPreviousRef.current = onPrevious;
     onSeekRef.current = onSeek;
-  }, [onTimeUpdate, onPlayerStateChange, onTrackError, onPlayPause, onNext, onPrevious, onSeek]);
+  }, [
+    onTimeUpdate,
+    onPlayerStateChange,
+    onTrackError,
+    onPlayPause,
+    onNext,
+    onCrossfadeNext,
+    onPrevious,
+    onSeek,
+  ]);
 
   const setActiveEngine = (mode: EngineMode) => {
     engineModeRef.current = mode;
     setEngineMode(mode);
+  };
+
+  // Cleanup any created Blob URLs when unmounting completely
+  useEffect(() => {
+    return () => {
+      blobUrlCacheRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch {
+          // ignore
+        }
+      });
+      blobUrlCacheRef.current.clear();
+    };
+  }, []);
+
+  // Register primary <audio> element for iOS/Android gesture unlock
+  useEffect(() => {
+    registerPrimaryAudioElement(deckARef.current);
+    return () => {
+      registerPrimaryAudioElement(null);
+    };
+  }, []);
+
+  const ensureDeckAttachedForWebAudio = (el: HTMLAudioElement | null, gain = 1) => {
+    if (!el) return;
+    sharedAudioEngine.attachDeck(el, gain);
+    sharedAudioEngine.applySettings(audioSettingsRef.current);
+    sharedAudioEngine.resume();
+  };
+
+  // Resolves a fresh playable URL for any track: Offline IndexedDB blob -> Backend /api/audio -> Client mirrors
+  const resolveNativeStreamForTrack = async (
+    track: Track,
+    probeTimeoutMs = 1800
+  ): Promise<CachedStreamEntry | null> => {
+    if (!track || !track.youtubeId) return null;
+
+    // 1. Offline IndexedDB storage (instant, works offline)
+    try {
+      const offlineRec = await getOfflineTrackRecord(track.youtubeId);
+      if (offlineRec?.audioBlob && offlineRec.audioBlob.size > 1024) {
+        let blobUrl = blobUrlCacheRef.current.get(track.youtubeId);
+        if (!blobUrl) {
+          blobUrl = URL.createObjectURL(offlineRec.audioBlob);
+          blobUrlCacheRef.current.set(track.youtubeId, blobUrl);
+        }
+        return { url: blobUrl, signedAtMs: Date.now(), isBlob: true };
+      }
+    } catch {
+      // Proceed to online streaming if IndexedDB unavailable
+    }
+
+    // Skip network probes when offline
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return null;
+    }
+
+    // 2. Signed backend /api/audio probe
+    try {
+      const sigHeaders = await createSignedHeaders('/api/audio', track.youtubeId);
+      const probeRes = await fetch(
+        `/api/audio?v=${encodeURIComponent(track.youtubeId)}&probe=1`,
+        {
+          headers: sigHeaders,
+          signal: AbortSignal.timeout(probeTimeoutMs),
+        }
+      );
+      if (probeRes.ok) {
+        const probeData = await probeRes.json();
+        if (probeData?.available) {
+          const signedUrl = await buildSignedAudioUrl(track.youtubeId);
+          return { url: signedUrl, signedAtMs: Date.now(), isBlob: false };
+        }
+      }
+    } catch {
+      // ignore probe timeout/error
+    }
+
+    // 3. Client Piped/Invidious mirror fallback
+    const refEl = deckARef.current;
+    const canPlay = refEl
+      ? (mime: string) => {
+          try {
+            return Boolean(refEl.canPlayType(mime));
+          } catch {
+            return true;
+          }
+        }
+      : undefined;
+
+    const mirror = await resolveClientMirrorAudio(track.youtubeId, canPlay);
+    if (mirror?.url) {
+      return { url: mirror.url, signedAtMs: Date.now(), isBlob: false };
+    }
+    return null;
+  };
+
+  // Pre-fetch next track stream and pre-warm standby deck cleanly in background
+  const prefetchNextTrackStream = async (targetTrack: Track) => {
+    if (!targetTrack || !targetTrack.youtubeId) return;
+    try {
+      const existing = resolvedStreamCacheRef.current.get(targetTrack.youtubeId);
+      let resolved = existing;
+      if (
+        !resolved ||
+        (resolved.url.startsWith('/api/audio') && !isSignatureFresh(resolved.signedAtMs))
+      ) {
+        const fresh = await resolveNativeStreamForTrack(targetTrack, 2200);
+        if (!fresh) return;
+        resolved = fresh;
+        resolvedStreamCacheRef.current.set(targetTrack.youtubeId, fresh);
+      }
+
+      // If still pointing to same next track and eligible for Web Audio, warm standby deck!
+      if (
+        nextTrackRef.current?.youtubeId === targetTrack.youtubeId &&
+        canRouteThroughWebAudio(resolved.url, window.location.origin)
+      ) {
+        const standbyIdx: 0 | 1 = activeDeckIdxRef.current === 0 ? 1 : 0;
+        const standbyEl = getDeckEl(standbyIdx);
+        if (standbyEl && !crossfadeRef.current) {
+          const playbackUrl =
+            resolved.url.startsWith('/api/audio') && !isSignatureFresh(resolved.signedAtMs)
+              ? await buildSignedAudioUrl(targetTrack.youtubeId)
+              : resolved.url;
+          ensureDeckAttachedForWebAudio(standbyEl, 0);
+          standbyEl.preload = 'auto';
+          standbyEl.src = playbackUrl;
+          standbyEl.load();
+          preparedDeckRef.current = {
+            youtubeId: targetTrack.youtubeId,
+            deckIndex: standbyIdx,
+            url: playbackUrl,
+          };
+        }
+      }
+    } catch {
+      // Background prefetch failures are always silent
+    }
   };
 
   // Update MediaSession metadata & lock-screen action handlers
@@ -130,8 +370,10 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       if (!isPlayingRef.current) {
         onPlayPauseRef.current?.();
       }
-      if (engineModeRef.current === 'native_audio' && nativeAudioRef.current) {
-        nativeAudioRef.current.play().catch(() => {});
+      const activeNative = getActiveNativeAudioEl();
+      if (engineModeRef.current === 'native_audio' && activeNative) {
+        sharedAudioEngine.resume();
+        activeNative.play().catch(() => {});
       } else if (playerRef.current) {
         try {
           playerRef.current.playVideo();
@@ -158,18 +400,20 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
 
     safeAction('seekbackward', (details) => {
       const offset = details.seekOffset || 10;
+      const activeNative = getActiveNativeAudioEl();
       const cur =
-        engineModeRef.current === 'native_audio' && nativeAudioRef.current
-          ? nativeAudioRef.current.currentTime || 0
+        engineModeRef.current === 'native_audio' && activeNative
+          ? activeNative.currentTime || 0
           : playerRef.current?.getCurrentTime?.() || 0;
       onSeekRef.current?.(Math.max(0, cur - offset));
     });
 
     safeAction('seekforward', (details) => {
       const offset = details.seekOffset || 10;
+      const activeNative = getActiveNativeAudioEl();
       const cur =
-        engineModeRef.current === 'native_audio' && nativeAudioRef.current
-          ? nativeAudioRef.current.currentTime || 0
+        engineModeRef.current === 'native_audio' && activeNative
+          ? activeNative.currentTime || 0
           : playerRef.current?.getCurrentTime?.() || 0;
       onSeekRef.current?.(cur + offset);
     });
@@ -188,8 +432,10 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         if (!isPlayingRef.current) {
           onPlayPauseRef.current?.();
         }
-        if (engineModeRef.current === 'native_audio' && nativeAudioRef.current) {
-          nativeAudioRef.current.play().catch(() => {});
+        const activeNative = getActiveNativeAudioEl();
+        if (engineModeRef.current === 'native_audio' && activeNative) {
+          sharedAudioEngine.resume();
+          activeNative.play().catch(() => {});
         } else if (playerRef.current) {
           try {
             playerRef.current.playVideo();
@@ -284,9 +530,10 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         };
       }).SpotiTubeAndroid;
 
+      const activeNative = getActiveNativeAudioEl();
       const curPosSec =
-        engineModeRef.current === 'native_audio' && nativeAudioRef.current
-          ? nativeAudioRef.current.currentTime || 0
+        engineModeRef.current === 'native_audio' && activeNative
+          ? activeNative.currentTime || 0
           : playerRef.current?.getCurrentTime?.() || 0;
       const trackDurSec = currentTrack?.durationSeconds || 0;
       const artworkUrl =
@@ -315,15 +562,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     }
   }, [currentTrack, isPlaying, engineMode]);
 
-  // Register primary <audio> element so user gestures unlock it before async resolution
-  useEffect(() => {
-    registerPrimaryAudioElement(nativeAudioRef.current);
-    return () => {
-      registerPrimaryAudioElement(null);
-    };
-  }, []);
-
-  // Pre-warm YouTube IFrame API & player instance immediately on mount for zero-delay playback
+  // Pre-warm YouTube IFrame API + run precision 150ms progress, pre-fetch, and crossfade loop
   useEffect(() => {
     let cancelled = false;
     loadYouTubeIFrameAPI()
@@ -342,7 +581,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
             rel: 0,
             playsinline: 1,
             enablejsapi: 1,
-            origin: window.location.origin
+            origin: window.location.origin,
           },
           events: {
             onReady: (event) => {
@@ -392,7 +631,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
                   shouldPreserveIntentOnVisibilityPause({
                     isDocumentHidden: document.hidden,
                     userIntendedPlay: isPlayingRef.current,
-                    msSinceHidden: hiddenElapsedMs
+                    msSinceHidden: hiddenElapsedMs,
                   })
                 ) {
                   for (const delayMs of [120, 400, 900, 1600]) {
@@ -421,8 +660,8 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
               if (currentTrackRef.current && onTrackErrorRef.current) {
                 onTrackErrorRef.current(currentTrackRef.current, err.data);
               }
-            }
-          }
+            },
+          },
         });
       })
       .catch(() => {
@@ -440,11 +679,12 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
 
       void clearBackgroundNowPlayingNotification();
 
-      // Returning to foreground: ensure active engine matches user intent
+      const activeNative = getActiveNativeAudioEl();
       if (isPlayingRef.current && currentTrackRef.current) {
-        if (engineModeRef.current === 'native_audio' && nativeAudioRef.current) {
-          if (nativeAudioRef.current.paused) {
-            nativeAudioRef.current.play().catch(() => {});
+        if (engineModeRef.current === 'native_audio' && activeNative) {
+          if (activeNative.paused) {
+            sharedAudioEngine.resume();
+            activeNative.play().catch(() => {});
           }
         } else if (playerRef.current) {
           try {
@@ -479,11 +719,12 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     const timer = setInterval(() => {
       let cur = 0;
       let dur = 0;
+      const activeNative = getActiveNativeAudioEl();
 
-      if (engineModeRef.current === 'native_audio' && nativeAudioRef.current) {
-        cur = nativeAudioRef.current.currentTime || 0;
-        dur = Number.isFinite(nativeAudioRef.current.duration)
-          ? nativeAudioRef.current.duration
+      if (engineModeRef.current === 'native_audio' && activeNative) {
+        cur = activeNative.currentTime || 0;
+        dur = Number.isFinite(activeNative.duration)
+          ? activeNative.duration
           : currentTrackRef.current?.durationSeconds || 0;
       } else {
         const p = playerRef.current;
@@ -497,8 +738,96 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
         }
       }
 
+      // Active crossfade gain envelope progression
+      if (crossfadeRef.current) {
+        const cf = crossfadeRef.current;
+        const elapsed = Date.now() - cf.startedAtMs;
+        const progress01 = Math.min(1, Math.max(0, elapsed / cf.durationMs));
+        const { outgoingGain, incomingGain } = computeCrossfadeGains(progress01);
+        setDeckOutputLevel(cf.fromEl, outgoingGain);
+        setDeckOutputLevel(cf.toEl, incomingGain);
+
+        if (progress01 >= 1) {
+          try {
+            cf.fromEl.pause();
+            cf.fromEl.removeAttribute('src');
+            cf.fromEl.load();
+          } catch {
+            // ignore
+          }
+          setDeckOutputLevel(cf.toEl, 1);
+          crossfadeRef.current = null;
+        }
+      }
+
       if (cur > 0 || dur > 0) {
         onTimeUpdateRef.current(cur, dur);
+
+        // 1. Background Next-Track Pre-fetch at 75% or <=20s remaining
+        const candidateNext = nextTrackRef.current;
+        if (
+          isPlayingRef.current &&
+          shouldPrefetchNextTrack({
+            currentTime: cur,
+            duration: dur,
+            nextTrackId: candidateNext?.youtubeId || null,
+            alreadyPrefetchedId: prefetchedForIdRef.current,
+            repeatMode: repeatModeRef.current,
+          }) &&
+          candidateNext
+        ) {
+          prefetchedForIdRef.current = candidateNext.youtubeId;
+          void prefetchNextTrackStream(candidateNext);
+        }
+
+        // 2. Smooth Crossfade transition when remaining <= crossfadeSeconds
+        const prepared = preparedDeckRef.current;
+        const cfSec = audioSettingsRef.current.crossfadeSeconds;
+        if (
+          !crossfadeRef.current &&
+          !isBypassActiveRef.current &&
+          isPlayingRef.current &&
+          candidateNext &&
+          prepared &&
+          prepared.youtubeId === candidateNext.youtubeId &&
+          shouldTriggerCrossfade({
+            currentTime: cur,
+            duration: dur,
+            crossfadeSeconds: cfSec,
+            hasPreparedNextTrack: true,
+            engineMode: engineModeRef.current,
+            repeatMode: repeatModeRef.current,
+          })
+        ) {
+          const fromEl = getDeckEl(activeDeckIdxRef.current);
+          const toEl = getDeckEl(prepared.deckIndex);
+          if (fromEl && toEl && fromEl !== toEl && toEl.src) {
+            skipNextTrackLoadIdRef.current = candidateNext.youtubeId;
+            activeDeckIdxRef.current = prepared.deckIndex;
+            preparedDeckRef.current = null;
+
+            ensureDeckAttachedForWebAudio(toEl, 0);
+            setDeckOutputLevel(toEl, 0);
+            toEl.currentTime = 0;
+            toEl
+              .play()
+              .then(() => {
+                crossfadeRef.current = {
+                  fromEl,
+                  toEl,
+                  durationMs: cfSec * 1000,
+                  startedAtMs: Date.now(),
+                };
+                onCrossfadeNextRef.current?.();
+              })
+              .catch(() => {
+                skipNextTrackLoadIdRef.current = null;
+                setDeckOutputLevel(fromEl, 1);
+              });
+          }
+        }
+
+        // 3. Periodic MediaSession & Android lockscreen position sync
         const now = Date.now();
         if (now - lastPositionUpdateRef.current > 1000 && dur > 0) {
           lastPositionUpdateRef.current = now;
@@ -512,7 +841,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
               navigator.mediaSession.setPositionState({
                 duration: dur,
                 playbackRate: isPlayingRef.current ? 1 : 0,
-                position: clampedSec
+                position: clampedSec,
               });
             } catch {
               // ignore
@@ -556,8 +885,6 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     };
   }, []);
 
-  const resolvedStreamCacheRef = useRef<Map<string, string>>(new Map());
-
   const startOrLoadYouTubeIFrame = (track: Track, startSeconds = 0) => {
     setActiveEngine('youtube_iframe');
 
@@ -599,7 +926,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
           rel: 0,
           playsinline: 1,
           enablejsapi: 1,
-          origin: window.location.origin
+          origin: window.location.origin,
         },
         events: {
           onReady: (event) => {
@@ -650,7 +977,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
                 shouldPreserveIntentOnVisibilityPause({
                   isDocumentHidden: document.hidden,
                   userIntendedPlay: isPlayingRef.current,
-                  msSinceHidden: hiddenElapsedMs
+                  msSinceHidden: hiddenElapsedMs,
                 })
               ) {
                 for (const delayMs of [120, 400, 900, 1600]) {
@@ -679,129 +1006,272 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
             if (currentTrackRef.current && onTrackErrorRef.current) {
               onTrackErrorRef.current(currentTrackRef.current, err.data);
             }
-          }
-        }
+          },
+        },
       });
     });
   };
 
-  // Zero-delay track start: play immediately via pre-warmed engine (or cached stream), probe background audio non-blocking
-  useEffect(() => {
-    if (!currentTrack) return;
+  // Play native URL either through Web Audio mastering deck (same-origin/blob) or clean bypass deck (external mirror)
+  const playNativeUrl = async (
+    track: Track,
+    url: string,
+    startSeconds = 0,
+    preferredDeckIdx?: 0 | 1
+  ): Promise<boolean> => {
+    const useWebAudio = canRouteThroughWebAudio(url, window.location.origin);
 
-    const seq = ++activeProbeSeqRef.current;
+    if (useWebAudio) {
+      const targetIdx = preferredDeckIdx ?? activeDeckIdxRef.current;
+      const el = getDeckEl(targetIdx);
+      if (!el) return false;
 
-    if (engineModeRef.current === 'native_audio' && nativeAudioRef.current) {
+      // Pause bypass if it was active
+      if (bypassAudioRef.current && !bypassAudioRef.current.paused) {
+        try {
+          bypassAudioRef.current.pause();
+        } catch {
+          // ignore
+        }
+      }
+
+      isBypassActiveRef.current = false;
+      activeDeckIdxRef.current = targetIdx;
+      ensureDeckAttachedForWebAudio(el, 1);
+
+      if (el.src !== url && !el.src.endsWith(url)) {
+        el.preload = 'auto';
+        el.src = url;
+      }
+      if (startSeconds > 0.4) {
+        try {
+          el.currentTime = startSeconds;
+        } catch {
+          // ignore
+        }
+      }
+      setDeckOutputLevel(el, 1);
+
+      setActiveEngine('native_audio');
       try {
-        nativeAudioRef.current.pause();
+        playerRef.current?.pauseVideo();
+      } catch {
+        // ignore
+      }
+
+      if (isPlayingRef.current) {
+        sharedAudioEngine.resume();
+        await el.play();
+      }
+      return true;
+    }
+
+    // External CORS-restricted third-party mirror -> use un-tainted bypass <audio>
+    const bypass = bypassAudioRef.current;
+    if (!bypass) return false;
+
+    const currentDeck = getDeckEl(activeDeckIdxRef.current);
+    if (currentDeck && !currentDeck.paused) {
+      try {
+        currentDeck.pause();
       } catch {
         // ignore
       }
     }
 
-    const cachedNativeUrl = resolvedStreamCacheRef.current.get(currentTrack.youtubeId);
-    if (cachedNativeUrl && nativeAudioRef.current) {
-      setActiveEngine('native_audio');
-      if (playerRef.current && isPlayerReady) {
-        try {
-          playerRef.current.pauseVideo();
-        } catch {
-          // ignore
-        }
+    isBypassActiveRef.current = true;
+    bypass.preload = 'auto';
+    bypass.src = url;
+    if (startSeconds > 0.4) {
+      try {
+        bypass.currentTime = startSeconds;
+      } catch {
+        // ignore
       }
-      const audioEl = nativeAudioRef.current;
-      let cancelledCached = false;
-      (async () => {
-        const freshUrl = cachedNativeUrl.startsWith('/api/audio')
-          ? await buildSignedAudioUrl(currentTrack.youtubeId)
-          : cachedNativeUrl;
-        if (cancelledCached || currentTrackRef.current?.youtubeId !== currentTrack.youtubeId) return;
-        audioEl.src = freshUrl;
-        audioEl.volume = isMutedRef.current ? 0 : Math.min(1, Math.max(0, volumeRef.current / 100));
-        audioEl.muted = isMutedRef.current;
-        if (isPlayingRef.current) {
-          audioEl.play().catch(() => {
+    }
+    setDeckOutputLevel(bypass, 1);
+
+    setActiveEngine('native_audio');
+    try {
+      playerRef.current?.pauseVideo();
+    } catch {
+      // ignore
+    }
+
+    if (isPlayingRef.current) {
+      await bypass.play();
+    }
+    return true;
+  };
+
+  // Track change lifecycle: Offline IndexedDB -> Pre-fetched gapless deck -> Instant IFrame + background native upgrade
+  useEffect(() => {
+    if (!currentTrack) return;
+
+    // Clear prefetch state for newly playing track
+    prefetchedForIdRef.current = null;
+
+    // If this track was just started cleanly via crossfade, preserve its active crossfading deck!
+    if (skipNextTrackLoadIdRef.current === currentTrack.youtubeId) {
+      skipNextTrackLoadIdRef.current = null;
+      return;
+    }
+
+    // Cancel any in-progress crossfade on manual track switch
+    if (crossfadeRef.current) {
+      try {
+        crossfadeRef.current.fromEl.pause();
+      } catch {
+        // ignore
+      }
+      crossfadeRef.current = null;
+    }
+
+    const seq = ++activeProbeSeqRef.current;
+
+    // Pause active native audio before switching
+    const curActiveNative = getActiveNativeAudioEl();
+    if (engineModeRef.current === 'native_audio' && curActiveNative) {
+      try {
+        curActiveNative.pause();
+      } catch {
+        // ignore
+      }
+    }
+
+    let cancelled = false;
+
+    // Fast path 1: Already warmed & prepared on standby deck!
+    const prepared = preparedDeckRef.current;
+    if (prepared && prepared.youtubeId === currentTrack.youtubeId) {
+      preparedDeckRef.current = null;
+      const targetDeck = getDeckEl(prepared.deckIndex);
+      if (targetDeck) {
+        (async () => {
+          const cached = resolvedStreamCacheRef.current.get(currentTrack.youtubeId);
+          let finalUrl = prepared.url;
+          if (cached?.url.startsWith('/api/audio') && !isSignatureFresh(cached.signedAtMs)) {
+            finalUrl = await buildSignedAudioUrl(currentTrack.youtubeId);
+            resolvedStreamCacheRef.current.set(currentTrack.youtubeId, {
+              url: finalUrl,
+              signedAtMs: Date.now(),
+            });
+          }
+          if (cancelled || currentTrackRef.current?.youtubeId !== currentTrack.youtubeId) return;
+          try {
+            await playNativeUrl(currentTrack, finalUrl, 0, prepared.deckIndex);
+          } catch {
             if (currentTrackRef.current?.youtubeId === currentTrack.youtubeId) {
               startOrLoadYouTubeIFrame(currentTrack, 0);
             }
+          }
+        })();
+        return () => {
+          cancelled = true;
+        };
+      }
+    }
+
+    // Fast path 2: Cached stream URL from earlier prefetch or previous play
+    const cachedStream = resolvedStreamCacheRef.current.get(currentTrack.youtubeId);
+    if (cachedStream) {
+      (async () => {
+        const freshUrl =
+          cachedStream.url.startsWith('/api/audio') && !isSignatureFresh(cachedStream.signedAtMs)
+            ? await buildSignedAudioUrl(currentTrack.youtubeId)
+            : cachedStream.url;
+        if (freshUrl !== cachedStream.url) {
+          resolvedStreamCacheRef.current.set(currentTrack.youtubeId, {
+            url: freshUrl,
+            signedAtMs: Date.now(),
+            isBlob: cachedStream.isBlob,
           });
+        }
+        if (cancelled || currentTrackRef.current?.youtubeId !== currentTrack.youtubeId) return;
+        try {
+          await playNativeUrl(currentTrack, freshUrl, 0);
+        } catch {
+          if (currentTrackRef.current?.youtubeId === currentTrack.youtubeId) {
+            startOrLoadYouTubeIFrame(currentTrack, 0);
+          }
         }
       })();
       return () => {
-        cancelledCached = true;
+        cancelled = true;
       };
     }
 
-    // Start immediately via pre-warmed IFrame with 0ms wait
-    startOrLoadYouTubeIFrame(currentTrack, 0);
-
-    let cancelled = false;
+    // Fast path 3: Check IndexedDB offline storage before touching YouTube IFrame
     (async () => {
-      const probeBackend = async (): Promise<string | null> => {
-        try {
-          const sigHeaders = await createSignedHeaders('/api/audio', currentTrack.youtubeId);
-          const probeRes = await fetch(
-            `/api/audio?v=${encodeURIComponent(currentTrack.youtubeId)}&probe=1`,
-            {
-              headers: sigHeaders,
-              signal: AbortSignal.timeout(1500)
-            }
-          );
-          if (probeRes.ok) {
-            const probeData = await probeRes.json();
-            if (probeData?.available) {
-              return await buildSignedAudioUrl(currentTrack.youtubeId);
-            }
-          }
-        } catch {
-          // ignore probe timeout/error
+      const offlineRec = await getOfflineTrackRecord(currentTrack.youtubeId);
+      if (cancelled || seq !== activeProbeSeqRef.current) return;
+
+      if (offlineRec?.audioBlob && offlineRec.audioBlob.size > 1024) {
+        let blobUrl = blobUrlCacheRef.current.get(currentTrack.youtubeId);
+        if (!blobUrl) {
+          blobUrl = URL.createObjectURL(offlineRec.audioBlob);
+          blobUrlCacheRef.current.set(currentTrack.youtubeId, blobUrl);
         }
-        return null;
-      };
+        resolvedStreamCacheRef.current.set(currentTrack.youtubeId, {
+          url: blobUrl,
+          signedAtMs: Date.now(),
+          isBlob: true,
+        });
+        try {
+          await playNativeUrl(currentTrack, blobUrl, 0);
+          return;
+        } catch {
+          // Fall through if local blob decoding fails
+        }
+      }
 
-      const audioEl = nativeAudioRef.current;
-      const canPlay = audioEl
-        ? (mime: string) => {
-            try {
-              return Boolean(audioEl.canPlayType(mime));
-            } catch {
-              return true;
-            }
-          }
-        : undefined;
-
-      const resolvedNativeUrl =
-        (await probeBackend()) ||
-        (await resolveClientMirrorAudio(currentTrack.youtubeId, canPlay).then((m) => m?.url || null));
-
-      if (cancelled || seq !== activeProbeSeqRef.current || !resolvedNativeUrl || !nativeAudioRef.current) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         return;
       }
 
-      resolvedStreamCacheRef.current.set(currentTrack.youtubeId, resolvedNativeUrl);
-      if (currentTrackRef.current?.youtubeId !== currentTrack.youtubeId) return;
+      // Start immediately via pre-warmed YouTube IFrame at 0ms while probing native stream in background
+      startOrLoadYouTubeIFrame(currentTrack, 0);
 
-      // Seamless handoff to native <audio> once buffered, preserving playback position
-      const el = nativeAudioRef.current;
-      el.preload = 'auto';
-      el.src = resolvedNativeUrl;
+      const resolved = await resolveNativeStreamForTrack(currentTrack, 1600);
+      if (
+        cancelled ||
+        seq !== activeProbeSeqRef.current ||
+        !resolved ||
+        currentTrackRef.current?.youtubeId !== currentTrack.youtubeId
+      ) {
+        return;
+      }
+
+      resolvedStreamCacheRef.current.set(currentTrack.youtubeId, resolved);
+
+      const useWebAudio = canRouteThroughWebAudio(resolved.url, window.location.origin);
+      const targetEl = useWebAudio ? getDeckEl(activeDeckIdxRef.current) : bypassAudioRef.current;
+      if (!targetEl) return;
+
+      if (useWebAudio) {
+        ensureDeckAttachedForWebAudio(targetEl, 1);
+      }
+      targetEl.preload = 'auto';
+      targetEl.src = resolved.url;
 
       const onCanPlayHandoff = () => {
-        el.removeEventListener('canplay', onCanPlayHandoff);
+        targetEl.removeEventListener('canplay', onCanPlayHandoff);
         if (cancelled || seq !== activeProbeSeqRef.current) return;
         if (currentTrackRef.current?.youtubeId !== currentTrack.youtubeId) return;
 
         const resumePos = playerRef.current?.getCurrentTime?.() || 0;
+        isBypassActiveRef.current = !useWebAudio;
         try {
-          if (resumePos > 0.4) el.currentTime = resumePos;
+          if (resumePos > 0.4) targetEl.currentTime = resumePos;
         } catch {
           // ignore
         }
-        el.volume = isMutedRef.current ? 0 : Math.min(1, Math.max(0, volumeRef.current / 100));
-        el.muted = isMutedRef.current;
+        setDeckOutputLevel(targetEl, 1);
 
         if (isPlayingRef.current) {
-          el.play()
+          if (useWebAudio) sharedAudioEngine.resume();
+          targetEl
+            .play()
             .then(() => {
               setActiveEngine('native_audio');
               try {
@@ -811,12 +1281,12 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
               }
             })
             .catch(() => {
-              // Keep YouTube IFrame playing seamlessly if native handoff is blocked
+              // Keep IFrame playing seamlessly if browser blocks handoff
             });
         }
       };
 
-      el.addEventListener('canplay', onCanPlayHandoff, { once: true });
+      targetEl.addEventListener('canplay', onCanPlayHandoff, { once: true });
     })();
 
     return () => {
@@ -828,14 +1298,15 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
   useEffect(() => {
     if (!currentTrack) return;
 
-    if (engineMode === 'native_audio' && nativeAudioRef.current) {
-      const audioEl = nativeAudioRef.current;
+    const activeNative = getActiveNativeAudioEl();
+    if (engineMode === 'native_audio' && activeNative) {
       if (isPlaying) {
-        if (audioEl.paused && audioEl.src) {
-          audioEl.play().catch(() => {});
+        if (activeNative.paused && activeNative.src) {
+          if (!isBypassActiveRef.current) sharedAudioEngine.resume();
+          activeNative.play().catch(() => {});
         }
-      } else if (!audioEl.paused) {
-        audioEl.pause();
+      } else if (!activeNative.paused) {
+        activeNative.pause();
       }
       return;
     }
@@ -853,11 +1324,11 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     }
   }, [isPlaying, isPlayerReady, currentTrack, engineMode]);
 
-  // Sync Volume across active engine
+  // Sync Volume across active engines
   useEffect(() => {
-    if (nativeAudioRef.current) {
-      nativeAudioRef.current.volume = isMuted ? 0 : Math.min(1, Math.max(0, volume / 100));
-      nativeAudioRef.current.muted = isMuted;
+    const activeNative = getActiveNativeAudioEl();
+    if (activeNative && !crossfadeRef.current) {
+      setDeckOutputLevel(activeNative, 1);
     }
 
     if (!playerRef.current || !isPlayerReady) return;
@@ -873,14 +1344,17 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     }
   }, [volume, isMuted, isPlayerReady]);
 
-  // Sync Seek target across active engine & immediately update external media notification seekbar
+  // Sync Seek target across active engine & external lockscreen seekbar
   useEffect(() => {
     if (seekTarget === null) return;
 
+    const activeNative = getActiveNativeAudioEl();
     const syncExternalSeekPosition = (posSec: number) => {
       const trackDurSec =
-        (engineModeRef.current === 'native_audio' && nativeAudioRef.current && Number.isFinite(nativeAudioRef.current.duration)
-          ? nativeAudioRef.current.duration
+        (engineModeRef.current === 'native_audio' &&
+        activeNative &&
+        Number.isFinite(activeNative.duration)
+          ? activeNative.duration
           : playerRef.current?.getDuration?.() || currentTrackRef.current?.durationSeconds) || 0;
       if (trackDurSec > 0) {
         const clampedSec = Math.min(trackDurSec, Math.max(0, posSec));
@@ -893,7 +1367,7 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
             navigator.mediaSession.setPositionState({
               duration: trackDurSec,
               playbackRate: isPlayingRef.current ? 1 : 0,
-              position: clampedSec
+              position: clampedSec,
             });
           } catch {
             // ignore
@@ -916,9 +1390,9 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
       }
     };
 
-    if (engineMode === 'native_audio' && nativeAudioRef.current) {
+    if (engineMode === 'native_audio' && activeNative) {
       try {
-        nativeAudioRef.current.currentTime = seekTarget;
+        activeNative.currentTime = seekTarget;
       } catch {
         // ignore
       }
@@ -942,41 +1416,77 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     }
   }, [seekTarget, isPlayerReady, engineMode]);
 
+  const handleAudioElPlay = (el: HTMLAudioElement | null) => {
+    if (el === getActiveNativeAudioEl() && engineModeRef.current === 'native_audio') {
+      onPlayerStateChangeRef.current('playing');
+    }
+  };
+
+  const handleAudioElPause = (el: HTMLAudioElement | null) => {
+    if (
+      el === getActiveNativeAudioEl() &&
+      engineModeRef.current === 'native_audio' &&
+      el?.getAttribute('src') &&
+      !document.hidden &&
+      !crossfadeRef.current
+    ) {
+      onPlayerStateChangeRef.current('paused');
+    }
+  };
+
+  const handleAudioElEnded = (el: HTMLAudioElement | null) => {
+    if (el === getActiveNativeAudioEl() && engineModeRef.current === 'native_audio') {
+      onPlayerStateChangeRef.current('ended');
+    }
+  };
+
+  const handleAudioElError = (el: HTMLAudioElement | null) => {
+    if (
+      el === getActiveNativeAudioEl() &&
+      engineModeRef.current === 'native_audio' &&
+      currentTrackRef.current
+    ) {
+      const resumeSec = el?.currentTime || 0;
+      if (typeof navigator === 'undefined' || navigator.onLine !== false) {
+        startOrLoadYouTubeIFrame(currentTrackRef.current, resumeSec);
+      }
+    }
+  };
+
   return (
     <>
-      {/* Native HTML5 Audio Element for true OS-level background playback on mobile */}
+      {/* Dual Web-Audio Mastering Decks (for same-origin /api/audio & IndexedDB blob: offline tracks) */}
       <audio
-        ref={nativeAudioRef}
+        ref={deckARef}
         preload="auto"
         playsInline
-        onPlay={() => {
-          if (engineModeRef.current === 'native_audio') {
-            onPlayerStateChangeRef.current('playing');
-          }
-        }}
-        onPause={() => {
-          if (
-            engineModeRef.current === 'native_audio' &&
-            nativeAudioRef.current?.getAttribute('src') &&
-            !document.hidden
-          ) {
-            onPlayerStateChangeRef.current('paused');
-          }
-        }}
-        onEnded={() => {
-          if (engineModeRef.current === 'native_audio') {
-            onPlayerStateChangeRef.current('ended');
-          }
-        }}
-        onError={() => {
-          if (engineModeRef.current === 'native_audio' && currentTrackRef.current) {
-            const resumeSec = nativeAudioRef.current?.currentTime || 0;
-            startOrLoadYouTubeIFrame(currentTrackRef.current, resumeSec);
-          }
-        }}
+        onPlay={() => handleAudioElPlay(deckARef.current)}
+        onPause={() => handleAudioElPause(deckARef.current)}
+        onEnded={() => handleAudioElEnded(deckARef.current)}
+        onError={() => handleAudioElError(deckARef.current)}
+      />
+      <audio
+        ref={deckBRef}
+        preload="auto"
+        playsInline
+        onPlay={() => handleAudioElPlay(deckBRef.current)}
+        onPause={() => handleAudioElPause(deckBRef.current)}
+        onEnded={() => handleAudioElEnded(deckBRef.current)}
+        onError={() => handleAudioElError(deckBRef.current)}
       />
 
-      {/* Hidden off-screen audio engine */}
+      {/* Clean Bypass <audio> Deck (guarantees CORS-restricted external mirrors never go silent) */}
+      <audio
+        ref={bypassAudioRef}
+        preload="auto"
+        playsInline
+        onPlay={() => handleAudioElPlay(bypassAudioRef.current)}
+        onPause={() => handleAudioElPause(bypassAudioRef.current)}
+        onEnded={() => handleAudioElEnded(bypassAudioRef.current)}
+        onError={() => handleAudioElError(bypassAudioRef.current)}
+      />
+
+      {/* Hidden off-screen YouTube IFrame fallback */}
       <div
         aria-hidden="true"
         tabIndex={-1}
@@ -987,4 +1497,3 @@ export const YouTubePlayerEmbed: React.FC<YouTubePlayerEmbedProps> = ({
     </>
   );
 };
-

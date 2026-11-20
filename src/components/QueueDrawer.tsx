@@ -31,7 +31,7 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
   const upcomingTracks = queue.slice(queueIndex + 1);
 
   return (
-    <aside className="fixed inset-0 md:static md:inset-auto w-full md:w-80 bg-[#0B0A0B] md:border-l border-white/[0.08] flex flex-col h-full z-50 md:z-30 select-none shadow-2xl shrink-0">
+    <aside className="fixed inset-0 md:static md:inset-auto w-full md:w-80 bg-[#0B0A0B] md:border-l border-white/[0.08] flex flex-col h-full z-[60] md:z-30 select-none shadow-2xl shrink-0">
       {/* Header */}
       <div className="px-4 py-3.5 border-b border-white/[0.08] flex items-center justify-between">
         <div className="flex items-center gap-2">

@@ -16,6 +16,8 @@ interface SearchPageProps {
   isPlaying: boolean;
   likedTrackIds: Set<string>;
   cachedYoutubeIds: Set<string>;
+  offlineSavedIds: Set<string>;
+  downloadProgressMap: Record<string, number>;
   isOfflineMode: boolean;
   customPlaylists: Playlist[];
   onSelectSearch: (term: string) => void;
@@ -29,6 +31,8 @@ interface SearchPageProps {
   onPlayNext: (track: Track) => void;
   onAddToPlaylist: (playlistId: string, track: Track) => void;
   onCacheTrack: (track: Track) => void;
+  onSaveOffline: (track: Track) => void;
+  onDeleteOffline: (youtubeId: string) => void;
 }
 
 export const SearchPage: React.FC<SearchPageProps> = ({
@@ -42,6 +46,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   isPlaying,
   likedTrackIds,
   cachedYoutubeIds,
+  offlineSavedIds,
+  downloadProgressMap,
   isOfflineMode,
   customPlaylists,
   onSelectSearch,
@@ -54,7 +60,9 @@ export const SearchPage: React.FC<SearchPageProps> = ({
   onAddToQueue,
   onPlayNext,
   onAddToPlaylist,
-  onCacheTrack
+  onCacheTrack,
+  onSaveOffline,
+  onDeleteOffline
 }) => {
   return (
     <div className="space-y-6">
@@ -96,6 +104,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                       isPlaying={isPlaying}
                       isLiked={likedTrackIds.has(track.id)}
                       isCached
+                      isSavedOffline={offlineSavedIds.has(track.youtubeId)}
+                      downloadProgress={downloadProgressMap[track.youtubeId] ?? null}
                       isOfflineDisabled={false}
                       customPlaylists={customPlaylists}
                       onPlay={(t) => onPlayTrack(t, cachedTracksList)}
@@ -105,6 +115,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                       onPlayNext={onPlayNext}
                       onAddToPlaylist={onAddToPlaylist}
                       onCacheTrack={onCacheTrack}
+                      onSaveOffline={onSaveOffline}
+                      onDeleteOffline={onDeleteOffline}
                     />
                   ))}
                 </div>
@@ -209,6 +221,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                     isPlaying={isPlaying}
                     isLiked={likedTrackIds.has(track.id)}
                     isCached={isCached}
+                    isSavedOffline={offlineSavedIds.has(track.youtubeId)}
+                    downloadProgress={downloadProgressMap[track.youtubeId] ?? null}
                     isOfflineDisabled={isOfflineMode && !isCached}
                     customPlaylists={customPlaylists}
                     onPlay={(t) => {
@@ -224,6 +238,8 @@ export const SearchPage: React.FC<SearchPageProps> = ({
                     onPlayNext={onPlayNext}
                     onAddToPlaylist={onAddToPlaylist}
                     onCacheTrack={onCacheTrack}
+                    onSaveOffline={onSaveOffline}
+                    onDeleteOffline={onDeleteOffline}
                   />
                 );
               })}

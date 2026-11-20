@@ -1,42 +1,102 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
   <defs>
-    <linearGradient id="kwBg" x1="16" y1="8" x2="112" y2="120" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#171113"/>
-      <stop offset="55%" stop-color="#0B0809"/>
-      <stop offset="100%" stop-color="#050405"/>
+    <linearGradient id="kwBg" x1="12" y1="6" x2="116" y2="122" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#14161D"/>
+      <stop offset="55%" stop-color="#09090B"/>
+      <stop offset="100%" stop-color="#050507"/>
     </linearGradient>
-    <radialGradient id="kwGlow" cx="50%" cy="45%" r="55%">
+    <radialGradient id="kwGlow" cx="50%" cy="48%" r="54%">
       <stop offset="0%" stop-color="#EF4444" stop-opacity="0.34"/>
-      <stop offset="70%" stop-color="#DC2626" stop-opacity="0.08"/>
-      <stop offset="100%" stop-color="#070607" stop-opacity="0"/>
+      <stop offset="68%" stop-color="#DC2626" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#09090B" stop-opacity="0"/>
     </radialGradient>
-    <linearGradient id="kwRed" x1="30" y1="24" x2="98" y2="104" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#FF5A52"/>
-      <stop offset="48%" stop-color="#EF4444"/>
+    <linearGradient id="kwBorder" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#EF4444" stop-opacity="0.65"/>
+      <stop offset="50%" stop-color="#FFFFFF" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#EF4444" stop-opacity="0.25"/>
+    </linearGradient>
+    <linearGradient id="kwBar" x1="0" y1="24" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF3333"/>
+      <stop offset="55%" stop-color="#EF4444"/>
+      <stop offset="100%" stop-color="#991B1B"/>
+    </linearGradient>
+    <linearGradient id="kwObsLeft" x1="52" y1="18" x2="98" y2="82" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3B485E"/>
+      <stop offset="50%" stop-color="#161B24"/>
+      <stop offset="100%" stop-color="#090B10"/>
+    </linearGradient>
+    <linearGradient id="kwObsRight" x1="134" y1="86" x2="168" y2="36" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0B0E14"/>
+      <stop offset="55%" stop-color="#181E29"/>
+      <stop offset="100%" stop-color="#354257"/>
+    </linearGradient>
+    <linearGradient id="kwRedFold" x1="114" y1="22" x2="152" y2="90" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF2E26"/>
+      <stop offset="32%" stop-color="#DC2626"/>
+      <stop offset="72%" stop-color="#991B1B"/>
+      <stop offset="100%" stop-color="#EF4444"/>
+    </linearGradient>
+    <linearGradient id="kwRedMain" x1="56" y1="34" x2="128" y2="94" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF3B30"/>
+      <stop offset="55%" stop-color="#EF4444"/>
       <stop offset="100%" stop-color="#B91C1C"/>
     </linearGradient>
-    <linearGradient id="kwBorder" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#EF4444" stop-opacity="0.72"/>
-      <stop offset="50%" stop-color="#DC2626" stop-opacity="0.28"/>
-      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.08"/>
+    <linearGradient id="kwRedValley" x1="76" y1="88" x2="106" y2="74" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#B91C1C"/>
+      <stop offset="100%" stop-color="#EF4444"/>
     </linearGradient>
   </defs>
 
-  <!-- Obsidian 3D Tile Base -->
+  <!-- Dark Obsidian Rounded Tile -->
   <rect width="128" height="128" rx="30" fill="url(#kwBg)"/>
   <rect width="128" height="128" rx="30" fill="url(#kwGlow)"/>
-  <rect x="2.5" y="2.5" width="123" height="123" rx="28" stroke="url(#kwBorder)" stroke-width="2.5"/>
+  <rect x="2" y="2" width="124" height="124" rx="28" stroke="url(#kwBorder)" stroke-width="2.2"/>
 
-  <!-- Outer Precision Vinyl Ring -->
-  <circle cx="64" cy="64" r="41" stroke="#EF4444" stroke-opacity="0.24" stroke-width="2"/>
-  <circle cx="64" cy="64" r="34" stroke="url(#kwRed)" stroke-width="3.2"/>
+  <!-- Centered Kiddwave Wave Emblem (220x120 scaled 0.48 -> 105.6x57.6 centered at 64,64) -->
+  <g transform="translate(11.2, 35.2) scale(0.48)">
+    <!-- Left Equalizer Bars -->
+    <rect x="8" y="42" width="15" height="36" rx="7.5" fill="url(#kwBar)"/>
+    <rect x="29" y="29" width="17" height="62" rx="8.5" fill="url(#kwBar)"/>
 
-  <!-- Bold Soundwave + Music Crest -->
-  <rect x="44" y="54" width="6.5" height="20" rx="3.25" fill="url(#kwRed)"/>
-  <rect x="54.5" y="42" width="6.5" height="44" rx="3.25" fill="#FFFFFF"/>
-  <rect x="65" y="48" width="6.5" height="32" rx="3.25" fill="url(#kwRed)"/>
-  <rect x="75.5" y="56" width="6.5" height="16" rx="3.25" fill="#F87171"/>
+    <!-- Right Equalizer Bars -->
+    <rect x="174" y="29" width="17" height="62" rx="8.5" fill="url(#kwBar)"/>
+    <rect x="197" y="42" width="15" height="36" rx="7.5" fill="url(#kwBar)"/>
 
-  <!-- Top Play Crest Dot -->
-  <circle cx="57.75" cy="34.5" r="2.6" fill="#EF4444"/>
+    <!-- Back-Left Obsidian Wing -->
+    <path
+      d="M54 26 C52 15 69 14 79 28 L99 68 C100 73 95 81 86 84 C69 68 56 46 54 26 Z"
+      fill="url(#kwObsLeft)"
+      stroke="rgba(255,255,255,0.24)"
+      stroke-width="1.4"
+      stroke-linejoin="round"
+    />
+
+    <!-- Back-Right Obsidian Wing -->
+    <path
+      d="M133 82 C141 62 152 41 167 36 C168 54 160 76 144 90 C138 93 133 89 133 82 Z"
+      fill="url(#kwObsRight)"
+      stroke="rgba(255,255,255,0.22)"
+      stroke-width="1.4"
+      stroke-linejoin="round"
+    />
+
+    <!-- Continuous Smooth Peak-to-Right-Valley Shaded Crimson Fold -->
+    <path
+      d="M111 33 C117 20 129 20 136 37 L146 66 C150 76 156 75 164 59 C160 77 151 92 138 92 C127 92 120 76 112 52 Z"
+      fill="url(#kwRedFold)"
+    />
+
+    <!-- Front Glossy Red Sweeping Left-to-Center Arch -->
+    <path
+      d="M56 36 C68 35 77 52 87 73 C91 81 96 81 100 71 L111 36 C114 25 120 22 125 25 C121 29 118 37 115 47 L103 82 C95 98 79 98 69 80 C61 64 57 49 56 36 Z"
+      fill="url(#kwRedMain)"
+    />
+
+    <!-- Left Valley Shaded Twist Accent -->
+    <path
+      d="M78 88 C86 96 97 94 103 82 L106 74 C98 84 87 88 78 88 Z"
+      fill="url(#kwRedValley)"
+      opacity="0.72"
+    />
+  </g>
 </svg>

@@ -4,36 +4,51 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Outer soft crimson ring -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#3FEF4444"
-        android:strokeWidth="1.8"
-        android:pathData="M54,23A31,31 0 1,1 53.99,23Z" />
-    <!-- Primary red vinyl/wave ring -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#EF4444"
-        android:strokeWidth="2.8"
-        android:pathData="M54,28A26,26 0 1,1 53.99,28Z" />
-    <!-- Soundwave Bar 1 -->
-    <path
-        android:fillColor="#DC2626"
-        android:pathData="M41.5,48.5a2.4,2.4 0 0,1 4.8,0v11a2.4,2.4 0 0,1 -4.8,0z" />
-    <!-- Soundwave Bar 2 (Peak white accent) -->
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M49.5,39a2.4,2.4 0 0,1 4.8,0v30a2.4,2.4 0 0,1 -4.8,0z" />
-    <!-- Soundwave Bar 3 -->
-    <path
-        android:fillColor="#EF4444"
-        android:pathData="M57.5,44a2.4,2.4 0 0,1 4.8,0v20a2.4,2.4 0 0,1 -4.8,0z" />
-    <!-- Soundwave Bar 4 -->
-    <path
-        android:fillColor="#F87171"
-        android:pathData="M65.5,50a2.4,2.4 0 0,1 4.8,0v8a2.4,2.4 0 0,1 -4.8,0z" />
-    <!-- Top Accent Dot -->
-    <path
-        android:fillColor="#EF4444"
-        android:pathData="M51.9,31.5a2,2 0 1,1 0,4a2,2 0 1,1 0,-4z" />
+    <group
+        android:translateX="20"
+        android:translateY="35.45"
+        android:scaleX="0.309"
+        android:scaleY="0.309">
+        <!-- Left Equalizer Bars -->
+        <path
+            android:fillColor="#EF4444"
+            android:pathData="M15.5,42A7.5,7.5 0 0,1 23,49.5V70.5A7.5,7.5 0 0,1 8,70.5V49.5A7.5,7.5 0 0,1 15.5,42Z" />
+        <path
+            android:fillColor="#EF4444"
+            android:pathData="M37.5,29A8.5,8.5 0 0,1 46,37.5V82.5A8.5,8.5 0 0,1 29,82.5V37.5A8.5,8.5 0 0,1 37.5,29Z" />
+
+        <!-- Right Equalizer Bars -->
+        <path
+            android:fillColor="#EF4444"
+            android:pathData="M182.5,29A8.5,8.5 0 0,1 191,37.5V82.5A8.5,8.5 0 0,1 174,82.5V37.5A8.5,8.5 0 0,1 182.5,29Z" />
+        <path
+            android:fillColor="#EF4444"
+            android:pathData="M204.5,42A7.5,7.5 0 0,1 212,49.5V70.5A7.5,7.5 0 0,1 197,70.5V49.5A7.5,7.5 0 0,1 204.5,42Z" />
+
+        <!-- Back-Left Obsidian Wing -->
+        <path
+            android:fillColor="#1E293B"
+            android:strokeColor="#475569"
+            android:strokeWidth="1.5"
+            android:strokeLineJoin="round"
+            android:pathData="M54,26 C52,15 69,14 79,28 L99,68 C100,73 95,81 86,84 C69,68 56,46 54,26 Z" />
+
+        <!-- Back-Right Obsidian Wing -->
+        <path
+            android:fillColor="#1E293B"
+            android:strokeColor="#475569"
+            android:strokeWidth="1.5"
+            android:strokeLineJoin="round"
+            android:pathData="M133,82 C141,62 152,41 167,36 C168,54 160,76 144,90 C138,93 133,89 133,82 Z" />
+
+        <!-- Continuous Smooth Peak-to-Right-Valley Shaded Crimson Fold -->
+        <path
+            android:fillColor="#B91C1C"
+            android:pathData="M111,33 C117,20 129,20 136,37 L146,66 C150,76 156,75 164,59 C160,77 151,92 138,92 C127,92 120,76 112,52 Z" />
+
+        <!-- Front Glossy Red Sweeping Left-to-Center Arch -->
+        <path
+            android:fillColor="#EF4444"
+            android:pathData="M56,36 C68,35 77,52 87,73 C91,81 96,81 100,71 L111,36 C114,25 120,22 125,25 C121,29 118,37 115,47 L103,82 C95,98 79,98 69,80 C61,64 57,49 56,36 Z" />
+    </group>
 </vector>

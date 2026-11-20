@@ -1,5 +1,15 @@
 import React from 'react';
-import { Play, Heart, Plus, MoreHorizontal, Check, FolderPlus, UserRound } from 'lucide-react';
+import {
+  Play,
+  Heart,
+  Plus,
+  MoreHorizontal,
+  Check,
+  FolderPlus,
+  UserRound,
+  Download,
+  Trash2,
+} from 'lucide-react';
 import { Track, Playlist } from '../types/music';
 import { CoverImage } from './CoverImage';
 
@@ -10,6 +20,8 @@ interface TrackRowProps {
   isPlaying: boolean;
   isLiked: boolean;
   isCached?: boolean;
+  isSavedOffline?: boolean;
+  downloadProgress?: number | null;
   isOfflineDisabled?: boolean;
   customPlaylists?: Playlist[];
   onPlay: (track: Track) => void;
@@ -19,6 +31,8 @@ interface TrackRowProps {
   onPlayNext: (track: Track) => void;
   onAddToPlaylist?: (playlistId: string, track: Track) => void;
   onCacheTrack?: (track: Track) => void;
+  onSaveOffline?: (track: Track) => void;
+  onDeleteOffline?: (youtubeId: string) => void;
 }
 
 export const TrackRow: React.FC<TrackRowProps> = React.memo(({
@@ -28,6 +42,8 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
   isPlaying,
   isLiked,
   isCached = false,
+  isSavedOffline = false,
+  downloadProgress = null,
   isOfflineDisabled = false,
   customPlaylists = [],
   onPlay,
@@ -36,9 +52,12 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
   onAddToQueue,
   onPlayNext,
   onAddToPlaylist,
-  onCacheTrack
+  onCacheTrack,
+  onSaveOffline,
+  onDeleteOffline,
 }) => {
   const [showMenu, setShowMenu] = React.useState(false);
+  const isDownloading = typeof downloadProgress === 'number' && downloadProgress >= 0 && downloadProgress < 100;
 
   return (
     <div
@@ -137,9 +156,18 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                 · {track.country}
               </span>
             )}
-            {isCached && (
-              <span className="text-[11px] font-medium text-[#FF443A] shrink-0">
-                · Cached
+            {isSavedOffline ? (
+              <span className="text-[11px] font-semibold text-[#FF443A] shrink-0">
+                · Offline
+              </span>
+            ) : isCached ? (
+              <span className="text-[11px] font-medium text-[#A39E9F] shrink-0">
+                · Recent
+              </span>
+            ) : null}
+            {isDownloading && (
+              <span className="text-[11px] font-mono tabular-nums text-[#FF443A] shrink-0">
+                · Saving {downloadProgress}%
               </span>
             )}
             {isOfflineDisabled && (
@@ -158,6 +186,43 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
 
       {/* Action Controls */}
       <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {onSaveOffline && (
+          <button
+            type="button"
+            onClick={() => {
+              if (isSavedOffline && onDeleteOffline) {
+                onDeleteOffline(track.youtubeId);
+              } else if (!isDownloading) {
+                onSaveOffline(track);
+              }
+            }}
+            disabled={isOfflineDisabled || isDownloading}
+            title={
+              isSavedOffline
+                ? 'Saved offline (click to remove)'
+                : isDownloading
+                  ? `Saving offline (${downloadProgress}%)`
+                  : 'Save track offline'
+            }
+            aria-label={isSavedOffline ? `Remove ${track.title} from offline library` : `Save ${track.title} offline`}
+            className={`hidden sm:inline-flex p-1.5 rounded-lg transition-all cursor-pointer disabled:opacity-40 ${
+              isSavedOffline
+                ? 'text-[#FF443A] opacity-100'
+                : isDownloading
+                  ? 'text-[#FF443A] opacity-100'
+                  : 'opacity-0 group-hover:opacity-100 text-[#A39E9F] hover:text-white'
+            }`}
+          >
+            {isDownloading ? (
+              <div className="w-4 h-4 border-2 border-[#FF443A] border-t-transparent rounded-full animate-spin" />
+            ) : isSavedOffline ? (
+              <Check className="w-4 h-4" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+          </button>
+        )}
+
         <button
           type="button"
           onClick={() => onToggleLike(track)}
@@ -190,7 +255,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
           </button>
 
           {showMenu && (
-            <div className="absolute right-0 top-full mt-1 w-52 bg-[#171213] border border-white/14 rounded-xl shadow-2xl py-1.5 z-50 text-xs">
+            <div className="absolute right-0 top-full mt-1 w-56 bg-[#171213] border border-white/14 rounded-xl shadow-2xl py-1.5 z-50 text-xs">
               {onInspectTrack && (
                 <button
                   type="button"
@@ -234,7 +299,33 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
               >
                 <span>{isLiked ? 'Remove from Favorites' : 'Save to Favorites'}</span>
               </button>
-              {onCacheTrack && (
+              {onSaveOffline && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isSavedOffline && onDeleteOffline) {
+                      onDeleteOffline(track.youtubeId);
+                    } else if (!isDownloading) {
+                      onSaveOffline(track);
+                    }
+                    setShowMenu(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 text-[#FF443A] hover:bg-white/[0.06] hover:text-white flex items-center gap-2 cursor-pointer font-medium"
+                >
+                  {isSavedOffline ? (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove Offline Audio</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{isDownloading ? `Saving (${downloadProgress}%)` : 'Save Offline'}</span>
+                    </>
+                  )}
+                </button>
+              )}
+              {!onSaveOffline && onCacheTrack && (
                 <button
                   type="button"
                   onClick={() => {
@@ -253,7 +344,7 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
                   <div className="px-3.5 py-1 text-[10px] text-[#A39E9F] font-semibold">
                     Add to Playlist
                   </div>
-                  {customPlaylists.map(pl => (
+                  {customPlaylists.map((pl) => (
                     <button
                       type="button"
                       key={pl.id}
@@ -287,6 +378,8 @@ export const TrackRow: React.FC<TrackRowProps> = React.memo(({
     prevProps.isPlaying === nextProps.isPlaying &&
     prevProps.isLiked === nextProps.isLiked &&
     prevProps.isCached === nextProps.isCached &&
+    prevProps.isSavedOffline === nextProps.isSavedOffline &&
+    prevProps.downloadProgress === nextProps.downloadProgress &&
     prevProps.isOfflineDisabled === nextProps.isOfflineDisabled &&
     prevProps.index === nextProps.index &&
     (prevProps.customPlaylists?.length ?? 0) === (nextProps.customPlaylists?.length ?? 0)

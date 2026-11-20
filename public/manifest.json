@@ -1,0 +1,31 @@
+{
+  "id": "/",
+  "name": "Kiddwave — High-Speed Music Streaming & Discovery",
+  "short_name": "Kiddwave",
+  "description": "High-speed global music streaming and discovery with zero-lag playback, regional charts, synced lyrics, and offline track caching.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#09090b",
+  "background_color": "#09090b",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -85,7 +85,7 @@ app.use((_req: Request, res: Response, next: NextFunction) => {
       "img-src 'self' data: blob: https://i.ytimg.com https://img.youtube.com https://images.unsplash.com https://upload.wikimedia.org https://thumb.wikimedia.org",
       "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
       "media-src 'self' data: blob: https:",
-      "connect-src 'self' ws: wss: https://pipedapi.kavin.rocks https://pipedapi.adminforge.de https://api.piped.private.coffee https://i.ytimg.com https://images.unsplash.com",
+      "connect-src 'self' blob: ws: wss: https://lrclib.net https://pipedapi.kavin.rocks https://pipedapi.adminforge.de https://api.piped.private.coffee https://i.ytimg.com https://images.unsplash.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'"

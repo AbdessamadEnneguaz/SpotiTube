@@ -10,6 +10,8 @@ interface RecentPageProps {
   isPlaying: boolean;
   likedTrackIds: Set<string>;
   cachedYoutubeIds: Set<string>;
+  offlineSavedIds: Set<string>;
+  downloadProgressMap: Record<string, number>;
   isOfflineMode: boolean;
   customPlaylists: Playlist[];
   onPlayTrack: (track: Track, list: Track[]) => void;
@@ -19,6 +21,8 @@ interface RecentPageProps {
   onPlayNext: (track: Track) => void;
   onAddToPlaylist: (playlistId: string, track: Track) => void;
   onCacheTrack: (track: Track) => void;
+  onSaveOffline: (track: Track) => void;
+  onDeleteOffline: (youtubeId: string) => void;
 }
 
 export const RecentPage: React.FC<RecentPageProps> = ({
@@ -28,6 +32,8 @@ export const RecentPage: React.FC<RecentPageProps> = ({
   isPlaying,
   likedTrackIds,
   cachedYoutubeIds,
+  offlineSavedIds,
+  downloadProgressMap,
   isOfflineMode,
   customPlaylists,
   onPlayTrack,
@@ -36,7 +42,9 @@ export const RecentPage: React.FC<RecentPageProps> = ({
   onAddToQueue,
   onPlayNext,
   onAddToPlaylist,
-  onCacheTrack
+  onCacheTrack,
+  onSaveOffline,
+  onDeleteOffline
 }) => {
   const tracksToShow = cachedTracksList.length > 0 ? cachedTracksList : frequentTracks;
 
@@ -97,6 +105,8 @@ export const RecentPage: React.FC<RecentPageProps> = ({
                 isPlaying={isPlaying}
                 isLiked={likedTrackIds.has(track.id)}
                 isCached={isCached}
+                isSavedOffline={offlineSavedIds.has(track.youtubeId)}
+                downloadProgress={downloadProgressMap[track.youtubeId] ?? null}
                 isOfflineDisabled={isOfflineMode && !isCached}
                 customPlaylists={customPlaylists}
                 onPlay={(t) => onPlayTrack(t, tracksToShow)}
@@ -106,6 +116,8 @@ export const RecentPage: React.FC<RecentPageProps> = ({
                 onPlayNext={onPlayNext}
                 onAddToPlaylist={onAddToPlaylist}
                 onCacheTrack={onCacheTrack}
+                onSaveOffline={onSaveOffline}
+                onDeleteOffline={onDeleteOffline}
               />
             );
           })}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Clock } from 'lucide-react';
+import { Play, Clock, Download, Check } from 'lucide-react';
 import { Playlist, Track } from '../types/music';
 import { CoverImage } from '../components/CoverImage';
 import { TrackRow } from '../components/TrackRow';
@@ -11,6 +11,9 @@ interface PlaylistPageProps {
   isPlaying: boolean;
   likedTrackIds: Set<string>;
   cachedYoutubeIds: Set<string>;
+  offlineSavedIds: Set<string>;
+  downloadProgressMap: Record<string, number>;
+  isSavingPlaylist?: boolean;
   isOfflineMode: boolean;
   customPlaylists: Playlist[];
   onPlayTrack: (track: Track, list: Track[]) => void;
@@ -20,6 +23,9 @@ interface PlaylistPageProps {
   onPlayNext: (track: Track) => void;
   onAddToPlaylist: (playlistId: string, track: Track) => void;
   onCacheTrack: (track: Track) => void;
+  onSaveOffline: (track: Track) => void;
+  onDeleteOffline: (youtubeId: string) => void;
+  onSavePlaylistOffline: (playlist: Playlist) => void;
 }
 
 export const PlaylistPage: React.FC<PlaylistPageProps> = ({
@@ -28,6 +34,9 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
   isPlaying,
   likedTrackIds,
   cachedYoutubeIds,
+  offlineSavedIds,
+  downloadProgressMap,
+  isSavingPlaylist = false,
   isOfflineMode,
   customPlaylists,
   onPlayTrack,
@@ -36,8 +45,14 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
   onAddToQueue,
   onPlayNext,
   onAddToPlaylist,
-  onCacheTrack
+  onCacheTrack,
+  onSaveOffline,
+  onDeleteOffline,
+  onSavePlaylistOffline,
 }) => {
+  const savedCount = playlist.tracks.filter((t) => offlineSavedIds.has(t.youtubeId)).length;
+  const allSavedOffline = playlist.tracks.length > 0 && savedCount === playlist.tracks.length;
+
   return (
     <div className="space-y-6">
       <div className="frame-3d-crimson flex flex-col md:flex-row items-center md:items-end text-center md:text-left gap-5 p-5 sm:p-6 rounded-2xl">
@@ -61,12 +76,12 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
           <div className="flex items-center justify-center md:justify-start gap-2 text-xs text-[#A39E9F] pt-1 tabular-nums">
             <span>{playlist.tracks.length} tracks</span>
             <span aria-hidden="true">·</span>
-            <span>Kiddwave Soundstage</span>
+            <span>{savedCount} saved offline</span>
           </div>
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={() => {
@@ -75,11 +90,43 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
             if (first) onPlayTrack(first, playlist.tracks);
           }}
           aria-label={`Play ${playlist.name}`}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer border border-[#F87171]/40 shadow-[0_6px_18px_rgba(239,68,68,0.38)]"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#EF4444] hover:bg-[#DC2626] text-white font-bold text-xs sm:text-sm transition-colors cursor-pointer border border-[#F87171]/40 shadow-[0_6px_18px_rgba(239,68,68,0.38)] whitespace-nowrap"
         >
           <Play className="w-4 h-4 fill-current" />
           <span>Play Collection</span>
         </button>
+
+        {playlist.tracks.length > 0 && (
+          <button
+            type="button"
+            onClick={() => onSavePlaylistOffline(playlist)}
+            disabled={allSavedOffline || isSavingPlaylist || isOfflineMode}
+            className={`frame-3d inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap disabled:opacity-60 ${
+              allSavedOffline
+                ? 'border-[#EF4444]/45 text-[#FF443A]'
+                : 'text-white hover:border-[#EF4444]/45'
+            }`}
+          >
+            {isSavingPlaylist ? (
+              <>
+                <div className="w-4 h-4 border-2 border-[#EF4444] border-t-transparent rounded-full animate-spin" />
+                <span className="tabular-nums">
+                  Saving Offline ({savedCount}/{playlist.tracks.length})
+                </span>
+              </>
+            ) : allSavedOffline ? (
+              <>
+                <Check className="w-4 h-4 text-[#FF443A]" />
+                <span>Saved Offline</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 text-[#EF4444]" />
+                <span>Save Playlist Offline</span>
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="space-y-1">
@@ -103,6 +150,7 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
         ) : (
           playlist.tracks.map((track, idx) => {
             const isCached = cachedYoutubeIds.has(track.youtubeId);
+            const isSaved = offlineSavedIds.has(track.youtubeId);
             return (
               <TrackRow
                 key={`${track.id}-${idx}`}
@@ -112,6 +160,8 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
                 isPlaying={isPlaying}
                 isLiked={likedTrackIds.has(track.id)}
                 isCached={isCached}
+                isSavedOffline={isSaved}
+                downloadProgress={downloadProgressMap[track.youtubeId] ?? null}
                 isOfflineDisabled={isOfflineMode && !isCached}
                 customPlaylists={customPlaylists}
                 onPlay={(t) => onPlayTrack(t, playlist.tracks)}
@@ -121,6 +171,8 @@ export const PlaylistPage: React.FC<PlaylistPageProps> = ({
                 onPlayNext={onPlayNext}
                 onAddToPlaylist={onAddToPlaylist}
                 onCacheTrack={onCacheTrack}
+                onSaveOffline={onSaveOffline}
+                onDeleteOffline={onDeleteOffline}
               />
             );
           })

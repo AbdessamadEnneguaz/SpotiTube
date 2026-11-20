@@ -43,13 +43,46 @@ export interface Playlist {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 
+export type EqualizerPreset =
+  | 'flat'
+  | 'bass_boost'
+  | 'pop'
+  | 'rock'
+  | 'vocal'
+  | 'electronic';
+
+export type CrossfadeSeconds = 0 | 2 | 4;
+
 export interface EqualizerSettings {
-  preset: 'flat' | 'bass_boost' | 'acoustic' | 'hip_hop' | 'vocal' | 'electronic';
-  bass: number; // -10 to +10 dB
-  midLow: number;
-  mid: number;
-  midHigh: number;
-  treble: number;
+  preset: EqualizerPreset;
+  band60Hz: number; // -12 to +12 dB (Low shelf)
+  band230Hz: number; // -12 to +12 dB (Peaking)
+  band910Hz: number; // -12 to +12 dB (Peaking)
+  band3600Hz: number; // -12 to +12 dB (Peaking)
+  band14000Hz: number; // -12 to +12 dB (High shelf)
+}
+
+export interface AudioSettings {
+  normalizationEnabled: boolean;
+  crossfadeSeconds: CrossfadeSeconds;
+  equalizer: EqualizerSettings;
+}
+
+export interface LyricsData {
+  syncedLines: LyricLine[];
+  plainText: string | null;
+  source: 'lrclib_synced' | 'lrclib_plain' | 'none';
+  matchedTitle?: string;
+  matchedArtist?: string;
+}
+
+export interface OfflineTrackMetadata {
+  youtubeId: string;
+  track: Track;
+  mimeType: string;
+  sizeBytes: number;
+  coverSizeBytes: number;
+  savedAt: number;
 }
 
 export interface PlayerState {
@@ -65,5 +98,5 @@ export interface PlayerState {
   history: Track[];
   queueIndex: number;
   audioQuality: 'normal' | 'high' | 'very_high_320k';
-  crossfadeSeconds: number;
+  crossfadeSeconds: CrossfadeSeconds;
 }

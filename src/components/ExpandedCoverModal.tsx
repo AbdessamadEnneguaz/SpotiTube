@@ -15,9 +15,17 @@ import {
   Music2,
   UserRound,
   Search,
-  Sparkles
+  Sparkles,
+  Mic2,
+  SlidersHorizontal,
+  ArrowDownCircle,
+  CheckCircle2,
+  Share2,
+  ListMusic,
+  Maximize2,
+  Check
 } from 'lucide-react';
-import { Track, RepeatMode } from '../types/music';
+import { Track, RepeatMode, LyricsData } from '../types/music';
 import { formatDuration } from '../utils/formatters';
 import {
   buildArtistProfile,
@@ -25,6 +33,8 @@ import {
   findRelatedTracks,
   getCuratedArtistProfile
 } from '../utils/artistProfile';
+import { findActiveLyricIndex } from '../utils/lrcParser';
+import { useAlbumColor } from '../utils/useAlbumColor';
 import { CoverImage } from './CoverImage';
 
 interface ExpandedCoverModalProps {
@@ -38,6 +48,10 @@ interface ExpandedCoverModalProps {
   repeatMode: RepeatMode;
   isShuffle: boolean;
   isLiked: boolean;
+  isSavedOffline?: boolean;
+  downloadProgress?: number | null;
+  lyricsData: LyricsData;
+  isLyricsLoading?: boolean;
   onPlayPause: () => void;
   onNext: () => void;
   onPrevious: () => void;
@@ -47,6 +61,11 @@ interface ExpandedCoverModalProps {
   onToggleLike: (track: Track) => void;
   onPlayTrack: (track: Track, contextList?: Track[]) => void;
   onSearchArtist: (artistName: string) => void;
+  onOpenLyrics: () => void;
+  onOpenAudioSettings: () => void;
+  onOpenQueue: () => void;
+  onSaveOffline: (track: Track) => void;
+  onDeleteOffline: (youtubeId: string) => void;
 }
 
 interface LiveArtistResponse {
@@ -67,6 +86,10 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
   repeatMode,
   isShuffle,
   isLiked,
+  isSavedOffline = false,
+  downloadProgress = null,
+  lyricsData,
+  isLyricsLoading = false,
   onPlayPause,
   onNext,
   onPrevious,
@@ -75,7 +98,12 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
   onToggleShuffle,
   onToggleLike,
   onPlayTrack,
-  onSearchArtist
+  onSearchArtist,
+  onOpenLyrics,
+  onOpenAudioSettings,
+  onOpenQueue,
+  onSaveOffline,
+  onDeleteOffline
 }) => {
   const [imgSrc, setImgSrc] = useState<string>('');
   const [isSeeking, setIsSeeking] = useState(false);
@@ -83,6 +111,9 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
   const [liveArtistData, setLiveArtistData] = useState<LiveArtistResponse | null>(null);
   const [isLoadingArtist, setIsLoadingArtist] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const albumPalette = useAlbumColor(imgSrc || track?.thumbnail, track?.youtubeId);
 
   const primaryArtistName = useMemo(
     () => (track ? extractPrimaryArtistName(track.artist) : ''),
@@ -152,6 +183,43 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
     return findRelatedTracks(track, catalog, 4);
   }, [track, catalog]);
 
+  const syncedLines = lyricsData?.syncedLines || [];
+  const activeLyricIndex = findActiveLyricIndex(syncedLines, currentTime);
+  const previewSyncedLines = useMemo(() => {
+    if (syncedLines.length === 0) return [];
+    const startIdx = activeLyricIndex >= 0 ? activeLyricIndex : 0;
+    return syncedLines.slice(startIdx, startIdx + 4);
+  }, [syncedLines, activeLyricIndex]);
+
+  const previewPlainLines = useMemo(() => {
+    if (!lyricsData?.plainText) return [];
+    return lyricsData.plainText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .slice(0, 4);
+  }, [lyricsData?.plainText]);
+
+  const handleShareTrack = async () => {
+    if (!track) return;
+    const shareUrl =
+      typeof window !== 'undefined' ? window.location.origin : 'https://kiddwave.vercel.app';
+    const text = `Listening to "${track.title}" by ${track.artist} on Kiddwave`;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        await navigator.share({ title: `${track.title} — ${track.artist}`, text, url: shareUrl });
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(`${text} · ${shareUrl}`);
+        setShareCopied(true);
+        window.setTimeout(() => setShareCopied(false), 2000);
+      }
+    } catch {
+      // User dismissed share sheet cleanly
+    }
+  };
+
   if (!isOpen || !track || !artistProfile) return null;
 
   const effectiveDuration =
@@ -167,19 +235,24 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
       aria-label={`Track and artist details for ${track.title}`}
       className="fixed inset-0 z-50 flex flex-col bg-[#070607]/98 text-[#F4F1F1] overflow-hidden"
     >
-      {/* Ambient Crimson & Artwork Backdrop */}
+      {/* Dynamic Album-Art Color & Artwork Backdrop */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none -z-10">
         <img
           src={imgSrc || track.thumbnail}
           alt=""
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover blur-3xl scale-125 opacity-20 grayscale contrast-125"
+          className="w-full h-full object-cover blur-3xl scale-125 opacity-20"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#230607]/80 via-[#070607]/92 to-[#070607]" />
+        <div
+          className="absolute inset-0 transition-colors duration-700"
+          style={{
+            background: `linear-gradient(180deg, rgba(${albumPalette.rgbTuple}, 0.65) 0%, #090809 55%, #070607 100%)`,
+          }}
+        />
       </div>
 
       {/* Sticky Top Header */}
-      <div className="px-4 sm:px-6 py-3.5 flex items-center justify-between border-b border-white/[0.08] shrink-0 bg-[#070607]/80 backdrop-blur-xl">
+      <div className="px-4 sm:px-6 py-3.5 flex items-center justify-between border-b border-white/[0.08] shrink-0 bg-black/25 backdrop-blur-xl">
         <button
           type="button"
           onClick={onClose}
@@ -227,7 +300,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
               />
             </div>
 
-            <div className="w-full flex items-center justify-between gap-3 mb-4">
+            <div className="w-full flex items-center justify-between gap-2.5 mb-4">
               <div className="min-w-0 flex-1">
                 <h1 className="font-display text-xl sm:text-2xl font-extrabold text-white tracking-tight truncate">
                   {track.title}
@@ -236,6 +309,40 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                   {track.artist}
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (isSavedOffline) {
+                    onDeleteOffline(track.youtubeId);
+                  } else if (downloadProgress === null) {
+                    onSaveOffline(track);
+                  }
+                }}
+                aria-label={isSavedOffline ? 'Remove offline download' : 'Download offline'}
+                title={
+                  typeof downloadProgress === 'number' && downloadProgress < 100
+                    ? `Downloading ${downloadProgress}%`
+                    : isSavedOffline
+                      ? 'Downloaded offline'
+                      : 'Save offline'
+                }
+                className={`w-11 h-11 rounded-xl flex items-center justify-center transition-colors cursor-pointer shrink-0 border ${
+                  isSavedOffline
+                    ? 'text-[#22C55E] bg-[#22C55E]/15 border-[#22C55E]/40'
+                    : 'text-[#D0CBCC] hover:text-white bg-white/[0.06] border-white/12'
+                }`}
+              >
+                {typeof downloadProgress === 'number' && downloadProgress < 100 ? (
+                  <span className="text-[10px] font-mono font-bold text-white tabular-nums">
+                    {downloadProgress}%
+                  </span>
+                ) : isSavedOffline ? (
+                  <CheckCircle2 className="w-5 h-5" />
+                ) : (
+                  <ArrowDownCircle className="w-5 h-5" />
+                )}
+              </button>
 
               <button
                 type="button"
@@ -294,13 +401,13 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
             </div>
 
             {/* Transport Controls */}
-            <div className="w-full flex items-center justify-between px-1.5 py-2 rounded-2xl bg-[#110E0F] border border-white/[0.08]">
+            <div className="w-full flex items-center justify-between px-1.5 py-2 rounded-2xl bg-black/30 border border-white/[0.08]">
               <button
                 type="button"
                 onClick={onToggleShuffle}
                 aria-label="Toggle shuffle"
                 className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
-                  isShuffle ? 'text-[#FF443A] bg-[#EF2323]/14' : 'text-[#A39E9F] hover:text-white'
+                  isShuffle ? 'text-[#FF443A] bg-[#EF2323]/14' : 'text-white/75 hover:text-white'
                 }`}
               >
                 <Shuffle className="w-4 h-4" />
@@ -310,7 +417,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 type="button"
                 onClick={onPrevious}
                 aria-label="Previous track"
-                className="text-[#D0CBCC] hover:text-white transition-colors cursor-pointer p-2.5"
+                className="text-white/90 hover:text-white transition-colors cursor-pointer p-2.5"
               >
                 <SkipBack className="w-6 h-6 fill-current" />
               </button>
@@ -319,7 +426,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 type="button"
                 onClick={onPlayPause}
                 aria-label={isPlaying ? 'Pause' : 'Play'}
-                className="w-14 h-14 rounded-2xl bg-[#EF2323] hover:bg-[#FF3830] text-white flex items-center justify-center active:scale-95 transition-transform shadow-[0_8px_24px_rgba(239,35,35,0.4)] cursor-pointer"
+                className="w-14 h-14 rounded-full bg-white text-black hover:scale-105 active:scale-95 transition-transform shadow-[0_8px_24px_rgba(0,0,0,0.45)] flex items-center justify-center cursor-pointer"
               >
                 {isPlaying ? (
                   <Pause className="w-6 h-6 fill-current" />
@@ -332,7 +439,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 type="button"
                 onClick={onNext}
                 aria-label="Next track"
-                className="text-[#D0CBCC] hover:text-white transition-colors cursor-pointer p-2.5"
+                className="text-white/90 hover:text-white transition-colors cursor-pointer p-2.5"
               >
                 <SkipForward className="w-6 h-6 fill-current" />
               </button>
@@ -342,7 +449,7 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 onClick={onToggleRepeat}
                 aria-label={`Toggle repeat (currently ${repeatMode})`}
                 className={`p-2.5 rounded-xl transition-colors cursor-pointer ${
-                  repeatMode !== 'off' ? 'text-[#FF443A] bg-[#EF2323]/14' : 'text-[#A39E9F] hover:text-white'
+                  repeatMode !== 'off' ? 'text-[#FF443A] bg-[#EF2323]/14' : 'text-white/75 hover:text-white'
                 }`}
               >
                 {repeatMode === 'one' ? (
@@ -352,6 +459,126 @@ export const ExpandedCoverModal: React.FC<ExpandedCoverModalProps> = ({
                 )}
               </button>
             </div>
+
+            {/* Spotify Mobile Action Strip Directly Beneath Playback Controls: Lyrics, Equalizer, Share, Queue */}
+            <div className="w-full grid grid-cols-4 gap-2 mt-3.5">
+              <button
+                type="button"
+                onClick={onOpenLyrics}
+                aria-label="Open live synced lyrics"
+                className="min-h-[44px] px-2 py-2 rounded-xl bg-black/30 border border-white/10 hover:border-white/30 text-[11px] font-semibold text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Mic2 className="w-3.5 h-3.5 text-white shrink-0" />
+                <span>Lyrics</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onOpenAudioSettings}
+                aria-label="Open equalizer settings"
+                className="min-h-[44px] px-2 py-2 rounded-xl bg-black/30 border border-white/10 hover:border-white/30 text-[11px] font-semibold text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5 text-white shrink-0" />
+                <span>Equalizer</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareTrack}
+                aria-label="Share track"
+                className="min-h-[44px] px-2 py-2 rounded-xl bg-black/30 border border-white/10 hover:border-white/30 text-[11px] font-semibold text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                {shareCopied ? (
+                  <>
+                    <Check className="w-3.5 h-3.5 text-[#22C55E] shrink-0" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="w-3.5 h-3.5 text-white shrink-0" />
+                    <span>Share</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={onOpenQueue}
+                aria-label="Open playback queue"
+                className="min-h-[44px] px-2 py-2 rounded-xl bg-black/30 border border-white/10 hover:border-white/30 text-[11px] font-semibold text-white flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <ListMusic className="w-3.5 h-3.5 text-white shrink-0" />
+                <span>Queue</span>
+              </button>
+            </div>
+
+            {/* Inline Dynamic-Colored Spotify Mobile Lyrics Preview Card */}
+            <section
+              aria-label="Inline lyrics preview"
+              style={{ backgroundColor: albumPalette.cardHex }}
+              className="w-full rounded-2xl p-4 sm:p-5 mt-4 border border-white/15 shadow-[0_16px_38px_rgba(0,0,0,0.45)] transition-colors duration-700 space-y-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="font-sans text-sm font-extrabold text-white tracking-tight">
+                  Lyrics
+                </h2>
+
+                <button
+                  type="button"
+                  onClick={onOpenLyrics}
+                  aria-label="Expand lyrics view"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 hover:bg-black/50 text-xs font-bold text-white transition-colors cursor-pointer"
+                >
+                  <span>Expand</span>
+                  <Maximize2 className="w-3 h-3" />
+                </button>
+              </div>
+
+              {isLyricsLoading ? (
+                <div className="py-5 text-xs font-semibold text-white/80">
+                  Loading synced lyrics...
+                </div>
+              ) : previewSyncedLines.length > 0 ? (
+                <div className="space-y-2.5">
+                  {previewSyncedLines.map((line, i) => {
+                    const isActivePreview = activeLyricIndex >= 0 && i === 0;
+                    return (
+                      <button
+                        type="button"
+                        key={`${line.time}-${i}`}
+                        onClick={() => onSeek(line.time)}
+                        className={`block w-full text-left font-sans text-base sm:text-lg font-extrabold leading-snug tracking-tight transition-opacity cursor-pointer ${
+                          isActivePreview
+                            ? 'text-white opacity-100'
+                            : 'text-white/80 hover:text-white'
+                        }`}
+                      >
+                        {line.text}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : previewPlainLines.length > 0 ? (
+                <div className="space-y-2">
+                  {previewPlainLines.map((line, idx) => (
+                    <p
+                      key={idx}
+                      className="font-sans text-sm sm:text-base font-extrabold leading-snug text-white/90"
+                    >
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenLyrics}
+                  className="w-full text-left py-2 text-sm font-bold text-white/80 hover:text-white transition-colors cursor-pointer"
+                >
+                  Tap Expand to view lyrics for this track
+                </button>
+              )}
+            </section>
           </div>
 
           {/* RIGHT: Editorial Artist & Track Inspector */}
